@@ -8,6 +8,7 @@
 
 import { Monster } from '../entities/monster.js';
 import { updateDungeon, updateHero } from './gameStore.js';
+import { getMaxStack, getConsumableById } from '../entities/consumable.js';
 
 class CombatSystem {
     constructor(game) {
@@ -53,29 +54,80 @@ class CombatSystem {
 
     /**
      * Handles the hero's turn in combat, including potion logic.
-     * If the monster's max hit can defeat the hero, the hero will use a potion (if available) to heal 20% of max health (rounded down) instead of attacking.
+     * If the monster's max hit can defeat the hero, the hero will use a potion (if available) to heal based on the potion's effectAmount instead of attacking.
      * @param {Hero} hero - The hero in combat
      * @param {Monster} monster - The monster being fought
-     * @returns {Object} { action: 'attack' | 'heal', damage: number, healed: number }
+     * @returns {Object} { action: 'attack' | 'heal', damage: number, healed: number, updatedHero: Hero }
      */
     heroTurn(hero, monster) {
         const monsterMaxHit = monster.maxDamage;
+        
+        // Check if we have any health potions to use (use health_potion consumable ID)
+        const hasPotions = hero.inventory?.potions && 
+                          typeof hero.inventory.potions === 'object' && 
+                          hero.inventory.potions.health_potion > 0;
+        
         // If monster's max hit can defeat the hero, try to heal
-        if (
-            monsterMaxHit > hero.health &&
-            hero.inventory && hero.inventory.potions > 0
-        ) {
-            // Use a potion to heal 20% of max health (rounded down)
-            const healAmount = Math.floor(hero.maxHealth * 0.2);
-            hero.health = Math.min(hero.health + healAmount, hero.maxHealth);
-            hero.inventory.potions -= 1;
-            return { action: 'heal', damage: 0, healed: healAmount };
+        if (monsterMaxHit > hero.health && hasPotions) {
+            // Get the health potion's effect amount (percentage of max health)
+            const healthPotion = getConsumableById('health_potion');
+            const healPercentage = healthPotion ? healthPotion.effectAmount : 0.2; // Default to 20% if not found
+            const healAmount = Math.floor(hero.maxHealth * healPercentage);
+            
+            // Create a new hero instance with updated health using heal method
+            let updatedHero = hero.heal(healAmount);
+            console.log(`Using potion to heal ${healAmount} health. New health: ${updatedHero.health}`);
+            
+            // Create a new inventory object with decremented potions
+            const newPotions = { ...updatedHero.inventory.potions };
+            newPotions.health_potion = (newPotions.health_potion || 0) - 1;
+            
+            // Create final updated hero with new inventory
+            const HeroClass = hero.constructor;
+            updatedHero = new HeroClass(updatedHero.name);
+            Object.assign(updatedHero, hero, { 
+                health: updatedHero.health, 
+                inventory: {
+                    ...updatedHero.inventory,
+                    potions: newPotions
+                }
+            });
+            
+            return { 
+                action: 'heal', 
+                damage: 0, 
+                healed: healAmount,
+                updatedHero
+            };
         } else {
             // Attack
             const heroDamage = hero.calculateDamage();
             monster.takeDamage(heroDamage);
-            return { action: 'attack', damage: heroDamage, healed: 0 };
+            
+            // NO LONGER reduce weapon durability here, as we'll do it at the end of combat
+            return { 
+                action: 'attack', 
+                damage: heroDamage, 
+                healed: 0,
+                updatedHero: hero 
+            };
         }
+    }
+
+    /**
+     * Handles the monster's turn in combat
+     * @param {Hero} hero - The hero in combat
+     * @param {Monster} monster - The monster attacking
+     * @returns {Object} { damage: number, updatedHero: Hero }
+     */
+    monsterTurn(hero, monster) {
+        const monsterDamage = monster.calculateDamage();
+        const damagedHero = hero.takeDamage(monsterDamage);
+        
+        return {
+            damage: monsterDamage,
+            updatedHero: damagedHero
+        };
     }
 
     /**
@@ -94,94 +146,145 @@ class CombatSystem {
         // Initialize or increment combat round
         explorerData.combatRound = (explorerData.combatRound || 0) + 1;
         
-        // Log first round of combat
+        // Log first round of combat only
         if (isFirstRound) {
             this.game.log(`${hero.name} engages in combat with a ${monster.name}!`);
         }
         
         // Hero's turn
         const heroAction = this.heroTurn(hero, monster);
+        let currentHero = heroAction.updatedHero; // Use the updated hero from heroTurn
+        
+        // Check if weapon broke during this turn
+        if (currentHero.weaponBroke) {
+            // Remove the weapon from equipment
+            currentHero.equipment.weapon = null;
+            delete currentHero.weaponBroke; // Clear the flag
+            this.game.log(`${hero.name}'s weapon broke during combat!`);
+        }
+        
+        // Only log potion use, skip attack messages
         if (heroAction.action === 'heal') {
             this.game.log(`${hero.name} uses a potion to heal for ${heroAction.healed} health!`);
-            updateHero(hero.id, { health: hero.health, potions: hero.inventory.potions });
+            updateHero(hero.id, currentHero);
         } else {
-            this.game.log(`Round ${explorerData.combatRound}: ${hero.name} hits the ${monster.name} for ${heroAction.damage} damage.`);
-            updateHero(hero.id, { health: hero.health, experience: hero.experience });
+            // No longer log each attack
+            updateDungeon(dungeon.id, dungeon);
         }
-        updateDungeon(dungeon.id, dungeon);
         
         // Check if monster is defeated
         if (monster.isDefeated()) {
-            hero.setCombat(false);
-            // Use reactive dungeon update for encounter completion
-            const updatedDungeon = dungeon.completeEncounterReactive(hero.id);
-            this.replaceDungeon(updatedDungeon);
-            
-            // Rewards: use isVariant to determine loot
-            let expGained, goldGained, partsGained;
-            if (monster.isVariant) {
-                expGained = 50 * dungeon.difficulty;
-                goldGained = dungeon.difficulty;
-                partsGained = 0;
-                this.awardLoot(hero, goldGained, partsGained);
-                updatedDungeon.completed = true;
-                // Clean up explorer state and reset hero after final boss
-                const cleanedDungeon = updatedDungeon.removeExplorerReactive(hero.id);
-                updateDungeon(dungeon.id, cleanedDungeon);
-                hero.resetDungeonProgress("victory", false, this.game, cleanedDungeon);
-                updateHero(hero.id, { ...hero });
-                return;
-            } else {
-                expGained = 10 * dungeon.difficulty;
-                goldGained = 0;
-                partsGained = monster.level;
-                this.awardLoot(hero, goldGained, partsGained);
-                
-                // Ensure hero can continue exploring after combat
-                const explorerData = updatedDungeon.getExplorerProgress(hero.id);
-                if (explorerData) {
-                    delete explorerData.combatRound;
-                    explorerData.currentMonster = null;
-                }
-                updateDungeon(dungeon.id, updatedDungeon);
-            }
-            
-            // Add experience and check for level up
-            const updatedHero = hero.addExperience(expGained);
-            updateHero(hero.id, { ...updatedHero });
-            
-            this.game.log(`${hero.name} defeats the ${monster.name}!`);
-            this.game.log(`Gained: ${expGained} experience, ${goldGained} gold, and ${partsGained} monster parts.`);
-            
-            if (updatedHero.level > hero.level) {
-                this.game.log(`${updatedHero.name} has leveled up to level ${updatedHero.level}!`);
-            }
-            
-            // Reset combat round tracker
-            delete explorerData.combatRound;
-            
+            this.handleMonsterDefeat(dungeon, hero, monster, currentHero);
             return;
         }
         
         // Monster attacks
-        const monsterDamage = monster.calculateDamage();
-        const damagedHero = hero.takeDamage(monsterDamage);
-        this.game.log(`Round ${explorerData.combatRound}: The ${monster.name} hits ${hero.name} for ${monsterDamage} damage.`);
-        updateHero(hero.id, { ...damagedHero });
+        const monsterAction = this.monsterTurn(currentHero, monster);
+        currentHero = monsterAction.updatedHero;
+        
+        // No longer log monster attacks
+        updateHero(hero.id, currentHero);
         updateDungeon(dungeon.id, dungeon);
         
         // Check if hero is defeated
-        if (damagedHero.health <= 0) {
-            damagedHero.resetDungeonProgress("defeat", true, this.game, dungeon);
-            // Remove hero from dungeon's explorer tracking (reactively)
-            const updatedDungeon = dungeon.removeExplorerReactive(hero.id);
-            updateDungeon(dungeon.id, updatedDungeon);
-            
-            // Reset combat round tracker
-            delete explorerData.combatRound;
-            // Update hero for reactivity after defeat
-            updateHero(hero.id, { ...damagedHero });
+        if (currentHero.health <= 0) {
+            this.handleHeroDefeat(dungeon, currentHero, explorerData);
         }
+    }
+
+    /**
+     * Handle monster defeat logic
+     * @param {Dungeon} dungeon - The dungeon where combat occurs
+     * @param {Hero} hero - The hero in combat
+     * @param {Monster} monster - The defeated monster
+     * @param {Hero} currentHero - The current hero state
+     */
+    handleMonsterDefeat(dungeon, hero, monster, currentHero) {
+        currentHero.setCombat(false);
+        // Use reactive dungeon update for encounter completion
+        const updatedDungeon = dungeon.completeEncounterReactive(hero.id);
+        this.replaceDungeon(updatedDungeon);
+        
+        // Reduce weapon durability once per completed fight
+        if (currentHero.equipment.weapon) {
+            currentHero.equipment.weapon.durability = Math.max(0, currentHero.equipment.weapon.durability - 1);
+            
+            // Check if weapon broke after combat
+            if (currentHero.equipment.weapon.durability <= 0) {
+                this.game.log(`${currentHero.name}'s ${currentHero.equipment.weapon.name} broke after defeating the ${monster.name}!`);
+                currentHero.equipment.weapon = null;
+            }
+        }
+        
+        // Rewards: use isVariant to determine loot
+        let expGained, goldGained, partsGained;
+        if (monster.isVariant) {
+            expGained = 50 * dungeon.difficulty;
+            goldGained = dungeon.difficulty;
+            partsGained = 0;
+            this.awardLoot(currentHero, goldGained, partsGained);
+            updatedDungeon.completed = true;
+            // Clean up explorer state and reset hero after final boss
+            const cleanedDungeon = updatedDungeon.removeExplorerReactive(hero.id);
+            updateDungeon(dungeon.id, cleanedDungeon);
+            currentHero.resetDungeonProgress("victory", false, this.game, cleanedDungeon);
+            updateHero(hero.id, currentHero);
+            return;
+        } else {
+            expGained = 10 * dungeon.difficulty;
+            goldGained = 0;
+            partsGained = monster.level;
+            this.awardLoot(currentHero, goldGained, partsGained);
+            
+            // Ensure hero can continue exploring after combat
+            const explorerData = updatedDungeon.getExplorerProgress(hero.id);
+            if (explorerData) {
+                delete explorerData.combatRound;
+                explorerData.currentMonster = null;
+            }
+            updateDungeon(dungeon.id, updatedDungeon);
+        }
+        
+        // Add experience and check for level up
+        const updatedHero = currentHero.addExperience(expGained);
+        
+        // If hero leveled up to level 2 or higher, unlock blacksmith
+        if (updatedHero.level >= 2 && currentHero.level < 2) {
+            this.game.unlockBlacksmithBuilding();
+        }
+        
+        updateHero(hero.id, updatedHero);
+        
+        this.game.log(`${hero.name} defeats the ${monster.name}!`);
+        this.game.log(`Gained: ${expGained} experience, ${goldGained} gold, and ${partsGained} monster parts.`);
+        
+        if (updatedHero.level > currentHero.level) {
+            this.game.log(`${updatedHero.name} has leveled up to level ${updatedHero.level}!`);
+        }
+        
+        // Reset combat round tracker in the explorer data
+        const explorerData = updatedDungeon.getExplorerProgress(hero.id);
+        if (explorerData) {
+            delete explorerData.combatRound;
+        }
+    }
+
+    /**
+     * Handle hero defeat logic
+     * @param {Dungeon} dungeon - The dungeon where combat occurs
+     * @param {Hero} hero - The defeated hero
+     * @param {Object} explorerData - The explorer data
+     */
+    handleHeroDefeat(dungeon, hero, explorerData) {
+        hero.resetDungeonProgress("defeat", true, this.game, dungeon);
+        // Remove hero from dungeon's explorer tracking (reactively)
+        const updatedDungeon = dungeon.removeExplorerReactive(hero.id);
+        updateDungeon(dungeon.id, updatedDungeon);
+        
+        // Reset combat round tracker
+        delete explorerData.combatRound;
+        // Update hero for reactivity after defeat
+        updateHero(hero.id, hero);
     }
 
     /**
@@ -201,125 +304,11 @@ class CombatSystem {
     }
 
     /**
-     * Generate a monster based on dungeon difficulty and monster type
-     * @param {Object} dungeon - The dungeon to generate a monster for
-     * @returns {Object} The generated monster
-     */
-    generateMonster(dungeon) {
-        return Monster.createMonster(dungeon.monsterType, dungeon.difficulty);
-    }
-    
-    /**
-     * Generate a final boss monster for a dungeon
-     * @param {Object} dungeon - The dungeon to generate a boss for
-     * @returns {Object} The generated boss monster
-     */
-    generateFinalMonster(dungeon) {
-        return Monster.createVariantMonster(
-            dungeon.monsterType,
-            dungeon.difficulty * 1.5,
-            dungeon.variant
-        );
-    }
-
-    /**
-     * Replace hero in the heroes array to trigger reactivity
-     * @param {Hero} hero - The hero to replace
-     */
-    replaceHero(hero) {
-        const HeroClass = hero.constructor;
-        const updatedHero = new HeroClass(hero.name);
-        Object.assign(updatedHero, hero);
-        this.game.heroes = this.game.heroes.map(h => h.id === hero.id ? updatedHero : h);
-    }
-
-    /**
      * Replace dungeon in the dungeons array to trigger reactivity
      * @param {Dungeon} dungeon - The dungeon to replace
      */
     replaceDungeon(dungeon) {
         this.game.dungeons = this.game.dungeons.map(d => d.id === dungeon.id ? dungeon : d);
-    }
-
-    /**
-     * Simulate the hero's chance of clearing the dungeon using actual monsters/boss logic.
-     * @param {Hero} hero - The hero attempting the dungeon
-     * @param {Dungeon} dungeon - The dungeon to simulate
-     * @param {number} [runs=1000] - Number of simulation runs
-     * @returns {number} Estimated success percentage (0-100)
-     */
-    simulateDungeonSuccessChance(hero, dungeon, runs = 1000) {
-        let successes = 0;
-        const steps = dungeon.length || 10; // Total steps to reach boss (adjust as needed)
-        const encounterRate = dungeon.encounterRate ?? 0.3; // Default 30% if not set
-
-        for (let i = 0; i < runs; i++) {
-            // Deep clone hero for simulation
-            const simHero = hero.clone ? hero.clone() : JSON.parse(JSON.stringify(hero));
-            simHero.health = simHero.maxHealth;
-            if (simHero.inventory?.potions) {
-                console.log(`Simulating with ${simHero.inventory.potions} potions`);
-            }
-            let survived = true;
-
-            // Simulate dungeon steps
-            for (let step = 0; step < steps; step++) {
-                if (Math.random() < encounterRate) {
-                    const monster = this.generateMonster(dungeon);
-                    if (!this.simulateCombat(simHero, monster)) {
-                        survived = false;
-                        break;
-                    }
-                }
-            }
-
-            // Simulate boss if survived all steps
-            if (survived) {
-                const boss = this.generateFinalMonster(dungeon);
-                if (!this.simulateCombat(simHero, boss)) {
-                    survived = false;
-                }
-            }
-
-            if (survived) successes++;
-        }
-        return Math.round((successes / runs) * 100);
-    }
-
-    /**
-     * Simulate combat between a hero and a monster (single encounter)
-     * Returns true if hero survives, false if defeated
-     * @param {Hero} simHero - Simulated hero object
-     * @param {Monster} simMonster - Simulated monster object
-     */
-    simulateCombat(simHero, simMonster) {
-        // Clone monster for simulation (assumes monster has a clone method)
-        const monster = simMonster.clone ? simMonster.clone() : JSON.parse(JSON.stringify(simMonster));
-        monster.health = monster.maxHealth;
-
-        while (simHero.health > 0 && monster.health > 0) {
-            // Hero's turn with potion logic
-            const monsterMaxHit = monster.maxDamage;
-            if (
-                monsterMaxHit > simHero.health &&
-                simHero.inventory && simHero.inventory.potions > 0
-            ) {
-                // Use a potion to heal 20% of max health (rounded down)
-                const healAmount = Math.floor(simHero.maxHealth * 0.2);
-                simHero.health = Math.min(simHero.health + healAmount, simHero.maxHealth);
-                simHero.inventory.potions -= 1;
-                // Hero skips attack this round
-            } else {
-                // Attack
-                const heroDamage = simHero.calculateDamage ? simHero.calculateDamage() : 10;
-                monster.health -= heroDamage;
-                if (monster.health <= 0) break;
-            }
-            // Monster attacks
-            const monsterDamage = monster.calculateDamage ? monster.calculateDamage() : 5;
-            simHero.health -= monsterDamage;
-        }
-        return simHero.health > 0;
     }
 }
 

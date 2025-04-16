@@ -9,12 +9,15 @@
 import { Hero } from '../entities/hero.js';
 import { Dungeon } from '../entities/dungeon.js';
 import { Monster } from '../entities/monster.js';
-import { getConsumableById, Consumables } from '../entities/consumable.js';
+import { getConsumableById, Consumables, getMaxStack, DEFAULT_MAX_POTIONS } from '../entities/consumable.js';
 
 // Import subsystems
 import { CombatSystem } from './combat.js';
 import { SaveLoadSystem } from './saveload.js';
 import { ExplorationSystem } from './exploration.js';
+import { Buildings } from './buildings.js';
+import { Shopping } from './shopping.js';
+import { Logging } from './logging.js';
 import { updateDungeon } from './gameStore.js';
 
 class Game {
@@ -31,11 +34,15 @@ class Game {
         this.dungeons = [];
         this.logs = []; // Array to store game logs
         this.potions = {}; // Town's potion inventory
+        this.weapons = {}; // Town's weapon inventory
         
         // Initialize subsystems
         this.combatSystem = new CombatSystem(this);
         this.saveLoadSystem = new SaveLoadSystem(this);
         this.explorationSystem = new ExplorationSystem(this);
+        this.buildingSystem = new Buildings(this);
+        this.shoppingSystem = new Shopping(this);
+        this.loggingSystem = new Logging(this);
     }
 
     /**
@@ -222,6 +229,9 @@ class Game {
         
         // Process hero decision-making for idle heroes
         this.processHeroDecisions();
+        
+        // Process shopping for heroes
+        this.shoppingSystem.processHeroShopping();
     }
 
     /**
@@ -251,37 +261,6 @@ class Game {
                     decision.action}`);
             }
         }
-
-        // --- FIX: Unstick heroes from shopping ---
-        // Find all heroes stuck in shopping and let them try to buy a potion
-        for (const hero of this.heroes) {
-            if (hero.status === "shopping") {
-                // Try to buy a potion if possible
-                const availablePotions = Consumables.filter(c => c.type === 'potion');
-                let bought = false;
-                for (const potion of availablePotions) {
-                    if (this.potions[potion.id] > 0 && hero.inventory.gold >= potion.salePrice) {
-                        // Transaction: hero pays gold, town receives gold, hero gets potion, town loses potion
-                        hero.inventory.gold -= potion.salePrice;
-                        this.resources.gold += potion.salePrice;
-                        this.potions[potion.id] -= 1;
-                        if (!hero.inventory.potions) hero.inventory.potions = {};
-                        hero.inventory.potions[potion.id] = (hero.inventory.potions[potion.id] || 0) + 1;
-                        this.log(`${hero.name} bought a ${potion.name} for ${potion.salePrice} gold.`);
-                        bought = true;
-                        break; // Only buy one per shopping session
-                    }
-                }
-                // After shopping, set hero to idle and mark as shopped
-                hero.status = "idle";
-                hero.hasShoppedForUpgrades = true;
-                if (!bought) {
-                    this.log(`${hero.name} finished shopping and is now idle.`);
-                }
-                // --- FIX: Replace hero in array to trigger reactivity ---
-                this.heroes = this.heroes.map(h => h.id === hero.id ? hero : h);
-            }
-        }
     }
 
     /**
@@ -290,16 +269,7 @@ class Game {
      * @returns {number} - The cost to upgrade the building
      */
     calculateBuildingUpgradeCost(building) {
-        // Special exponential scaling for tent to make heroes progressively harder to get
-        if (building.id === 'tent') {
-            // Use a power of 10 scaling (5, 50, 500, etc.)
-            return Math.floor(building.baseCost * Math.pow(10, building.level));
-        } else {
-            // For other buildings, use standard formula if they have costMultiplier
-            return building.costMultiplier ? 
-                Math.floor(building.baseCost * Math.pow(building.costMultiplier, building.level)) :
-                building.baseCost;
-        }
+        return this.buildingSystem.calculateBuildingUpgradeCost(building);
     }
 
     /**
@@ -307,28 +277,7 @@ class Game {
      * @param {string} buildingId - The ID of the building to upgrade
      */
     upgradeBuilding(buildingId) {
-        const building = this.buildings.find(b => b.id === buildingId);
-        
-        if (!building) {
-            this.log(`Error: Building ${buildingId} not found`);
-            return;
-        }
-        
-        const upgradeCost = this.calculateBuildingUpgradeCost(building);
-        
-        if (this.resources.materials >= upgradeCost) {
-            this.resources.materials -= upgradeCost;
-            building.level += 1;
-            
-            this.log(`Upgraded ${building.name} to level ${building.level}`);
-            
-            // If this is the tent, spawn a hero with every upgrade
-            if (buildingId === 'tent') {
-                this.spawnHero();
-            }
-        } else {
-            this.log(`Not enough materials to upgrade ${building.name}. Need ${upgradeCost} materials.`);
-        }
+        this.buildingSystem.upgradeBuilding(buildingId);
     }
     
     /**
@@ -336,27 +285,21 @@ class Game {
      * @returns {Hero} The newly spawned hero
      */
     spawnHero() {
-        const hero = new Hero();
-        this.heroes.push(hero);
-        this.log(`A new hero has appeared: ${hero.name}!`);
-        return hero;
+        return this.buildingSystem.spawnHero();
     }
 
     /**
      * Unlock the Apothecary building when first monster part is gained
      */
     unlockApothecaryBuilding() {
-        if (!this.buildings.some(b => b.id === 'apothecary')) {
-            this.buildings.push({
-                id: 'apothecary',
-                name: 'Apothecary',
-                level: 0,
-                description: 'A place to craft potions and remedies. (Placeholder)',
-                baseCost: 10, // Cost in materials
-                unlocked: true
-            });
-            this.log('The Apothecary is now available for construction!');
-        }
+        this.buildingSystem.unlockApothecaryBuilding();
+    }
+
+    /**
+     * Unlock the Blacksmith building when a hero reaches level 2
+     */
+    unlockBlacksmithBuilding() {
+        this.buildingSystem.unlockBlacksmithBuilding();
     }
 
     /**
@@ -364,16 +307,7 @@ class Game {
      * @param {string} message - The message to log
      */
     log(message) {
-        this.logs.unshift({
-            id: Date.now() + '_' + Math.floor(Math.random() * 1000000), // Ensures uniqueness
-            text: message,
-            timestamp: new Date().toLocaleTimeString()
-        });
-        
-        // Keep log to a reasonable size
-        if (this.logs.length > 100) {
-            this.logs.pop();
-        }
+        this.loggingSystem.log(message);
     }
 }
 const gameInstance = new Game();

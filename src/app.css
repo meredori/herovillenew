@@ -1,5 +1,12 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Primary font stack */
+  --font-primary: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Fantasy/medieval font stack for headings and special elements */
+  --font-fantasy: 'MedievalSharp', 'Alegreya SC', serif;
+  /* Accent font for certain UI elements */
+  --font-accent: 'Cinzel', serif;
+  
+  font-family: var(--font-primary);
   line-height: 1.5;
   font-weight: 400;
 
@@ -11,6 +18,30 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Import fantasy fonts for the entire application */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=MedievalSharp&family=Alegreya+SC:wght@400;700&display=swap');
+
+/* Fantasy font styling for headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-fantasy);
+  letter-spacing: 0.03em;
+  color: #3e2c1c;
+}
+
+/* Button and interactive element styling */
+button, 
+.button,
+select,
+.tab-button {
+  font-family: var(--font-accent);
+  font-weight: 500;
+}
+
+/* Standard text elements */
+p, a, li, span, div {
+  font-family: var(--font-primary);
 }
 
 a {

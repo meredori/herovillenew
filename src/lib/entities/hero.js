@@ -4,8 +4,8 @@
  * Defines the hero entity with health, damage, experience, and equipment slots.
  */
 
-import { combatSystem } from '../core/game.js';
 import { CombatCalculator } from '../utilities/combat-calculator.js';
+import { CombatSimulation } from '../utilities/combat-simulation.js';
 
 class Hero {
     constructor(name) {
@@ -25,7 +25,7 @@ class Hero {
         this.inventory = {
             gold: 0,
             monsterParts: 0,
-            potions: {} // Add potions inventory for the hero
+            potions: {} // Keep potions as an object for different potion types
         };
         
         // Hero status tracking properties
@@ -64,6 +64,14 @@ class Hero {
      * @returns {number} The amount of damage dealt
      */
     calculateDamage() {
+        if (this.equipment.weapon) {
+            const weapon = this.equipment.weapon;
+            // Weapon's damage range + hero's base damage - 1
+            return CombatCalculator.calculateAttackDamage(
+                weapon.minDamage + this.minDamage - 1,
+                weapon.maxDamage + this.maxDamage - 1
+            );
+        }
         return CombatCalculator.calculateAttackDamage(this.minDamage, this.maxDamage);
     }
 
@@ -191,13 +199,21 @@ class Hero {
      * @returns {Hero} Updated hero instance
      */
     heal(amount) {
-        const health = Math.min(this.maxHealth, this.health + amount);
-        const status = (health >= this.maxHealth && this.status === "healing") ? "idle" : this.status;
+        // Calculate the new health by adding amount, but not exceeding maxHealth
+        const newHealth = Math.min(this.maxHealth, this.health + amount);
+        // Update status to idle if fully healed and was healing
+        const newStatus = (newHealth >= this.maxHealth && this.status === "healing") ? "idle" : this.status;
+        
+        // Create a new hero instance
         const updated = new Hero(this.name);
-        Object.assign(updated, this, {
-            health,
-            status
-        });
+        
+        // Copy all properties from the current hero to the new instance
+        Object.assign(updated, this);
+        
+        // Then specifically set the new health and status
+        updated.health = newHealth;
+        updated.status = newStatus;
+        
         return updated;
     }
 
@@ -206,19 +222,19 @@ class Hero {
      * Spent monster parts are removed from hero inventory and added to the town's inventory.
      * @param {number} partsToSpend - Number of monster parts to spend
      * @param {Object} game - The game instance (for town inventory)
-     * @returns {number} The amount healed
+     * @returns {Hero} The updated hero instance
      */
     fastHeal(partsToSpend, game) {
-        if (!partsToSpend || partsToSpend <= 0) return 0;
+        if (!partsToSpend || partsToSpend <= 0) return this;
         const actualParts = Math.min(partsToSpend, this.inventory.monsterParts);
-        if (actualParts === 0) return 0;
+        if (actualParts === 0) return this;
         const healAmount = actualParts * 5;
         this.inventory.monsterParts -= actualParts;
         if (game && game.resources) {
             game.resources.monsterParts += actualParts;
         }
-        this.heal(healAmount);
-        return healAmount;
+        // Apply healing and return the updated hero instance
+        return this.heal(healAmount);
     }
 
     /**
@@ -259,9 +275,8 @@ class Hero {
      * @returns {number} Success chance as a percentage (0-100)
      */
     calculateDungeonSuccessChance(dungeon) {
-        // Use the new simulation-based success chance
-        const successChance = combatSystem.simulateDungeonSuccessChance(this, dungeon);
-        return successChance;
+        // Use the new CombatSimulation class for simulation-based success chance
+        return CombatSimulation.simulateDungeonSuccessChance(this, dungeon);
     }
     
     /**
@@ -282,19 +297,12 @@ class Hero {
             return { action: "healing", target: null };
         }
         
-        // Priority 2: Shop for upgrades if hasn't done so since last level up
-        if (!this.hasShoppedForUpgrades) {
-            this.hasShoppedForUpgrades = true; // Mark as shopped
-            return { action: "shopping", target: null };
-        }
+        // Find the best dungeon first (this will be used for shopping and repair decisions)
+        let bestDungeon = null;
+        let highestSuccessChance = 0;
         
-        // Priority 3: Enter a dungeon with good success chance
+        // Filter to only consider discovered dungeons
         if (dungeons && dungeons.length > 0) {
-            // First find dungeons with at least 50% success chance
-            let bestDungeon = null;
-            let highestSuccessChance = 0;
-            
-            // Filter to only consider discovered dungeons
             const availableDungeons = dungeons.filter(d => d.discovered);
             
             for (const dungeon of availableDungeons) {
@@ -311,16 +319,35 @@ class Hero {
                     highestSuccessChance = successChance;
                 }
             }
+        }
+        
+        // Priority 2: Shop for upgrades if hasn't done so since last level up
+        if (!this.hasShoppedForUpgrades) {
+            // Mark as shopped before we make any weapon/shopping decisions
+            this.hasShoppedForUpgrades = true;
             
-            if (bestDungeon) {
-                if (gameState && gameState.explorationSystem && typeof gameState.explorationSystem.assignHeroToDungeon === 'function') {
-                    gameState.explorationSystem.assignHeroToDungeon(this, bestDungeon);
-                } else {
-                    this.setStatus("exploring", bestDungeon.id);
-                }
-                this.dungeonSuccessChance = highestSuccessChance; // Store success chance
-                return { action: "exploring", target: bestDungeon.id };
+            // Shopping will now include checking for weapons and repairs
+            // The game.js will handle the actual purchase and repairs
+            return { 
+                action: "shopping", 
+                target: null,
+                bestDungeon: bestDungeon ? {
+                    id: bestDungeon.id,
+                    length: bestDungeon.length,
+                    difficulty: bestDungeon.difficulty
+                } : null
+            };
+        }
+        
+        // Priority 3: Enter a dungeon with good success chance
+        if (bestDungeon) {
+            if (gameState && gameState.explorationSystem && typeof gameState.explorationSystem.assignHeroToDungeon === 'function') {
+                gameState.explorationSystem.assignHeroToDungeon(this, bestDungeon);
+            } else {
+                this.setStatus("exploring", bestDungeon.id);
             }
+            this.dungeonSuccessChance = highestSuccessChance; // Store success chance
+            return { action: "exploring", target: bestDungeon.id };
         }
         
         // If no viable dungeon found, stay idle

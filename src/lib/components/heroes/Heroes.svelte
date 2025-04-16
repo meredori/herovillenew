@@ -2,6 +2,44 @@
 <script>
   import { heroes, dungeons } from '../../core/gameStore.js';
   import { Consumables } from '../../entities/consumable.js';
+  import { onMount } from 'svelte';
+
+  // Track the currently selected hero
+  let selectedHeroId = null;
+  let selectedHero = null;
+
+  // Select first hero by default when the component mounts
+  onMount(() => {
+    if ($heroes && $heroes.length > 0) {
+      selectHero($heroes[0].id);
+    }
+  });
+
+  // Update selected hero when heroes store changes
+  $: {
+    if ($heroes && $heroes.length > 0) {
+      if (selectedHeroId === null) {
+        selectHero($heroes[0].id);
+      } else {
+        // Make sure the selected hero still exists
+        const heroExists = $heroes.some(h => h.id === selectedHeroId);
+        if (!heroExists && $heroes.length > 0) {
+          selectHero($heroes[0].id);
+        } else if (heroExists) {
+          selectedHero = $heroes.find(h => h.id === selectedHeroId);
+        }
+      }
+    } else {
+      selectedHeroId = null;
+      selectedHero = null;
+    }
+  }
+
+  // Function to select a hero
+  function selectHero(heroId) {
+    selectedHeroId = heroId;
+    selectedHero = $heroes.find(h => h.id === heroId);
+  }
 
   // Helper to get combat details for a hero
   function getCombatDetails(hero, $dungeons) {
@@ -18,38 +56,93 @@
       monsterDamage: `${explorer.currentMonster.minDamage}-${explorer.currentMonster.maxDamage}`
     };
   }
+
+  // Helper to get status color class
+  function getStatusClass(status) {
+    return {
+      idle: 'status-idle',
+      exploring: 'status-exploring',
+      healing: 'status-healing'
+    }[status] || 'status-idle';
+  }
+
+  // Helper to get a human-readable status label
+  function getStatusLabel(hero) {
+    if (hero.status === 'idle') return 'Idle';
+    if (hero.status === 'healing') return 'Healing';
+    if (hero.status === 'exploring') {
+      if (hero.inCombat) return 'In Combat';
+      return 'Exploring';
+    }
+    return hero.status;
+  }
 </script>
 
 <div class="heroes-container">
   <h2>Heroes</h2>
   
-  <div class="heroes-list" id="heroes-list">
-    {#if $heroes.length > 0}
-      {#each $heroes as hero}
-        {@const heroInfo = hero.getDisplayInfo()}
+  {#if $heroes.length > 0}
+    <div class="heroes-layout">
+      <!-- Heroes List (left side) -->
+      <div class="heroes-list">
+        {#each $heroes as hero}
+          {@const heroInfo = hero.getDisplayInfo()}
+          {@const healthPercent = parseInt(heroInfo.health.split('/')[0]) / parseInt(heroInfo.health.split('/')[1]) * 100}
+          
+          <div 
+            class="hero-list-item {hero.id === selectedHeroId ? 'selected' : ''} hero-{hero.status}"
+            on:click={() => selectHero(hero.id)}
+          >
+            <div class="hero-list-header">
+              <h3>{heroInfo.name}</h3>
+              <div class="hero-status {getStatusClass(hero.status)}">
+                {getStatusLabel(hero)}
+              </div>
+            </div>
+            
+            <div class="hero-list-stats">
+              <div class="hero-health">
+                <div class="progress-bar">
+                  <div class="progress-fill health-fill" style="width: {healthPercent}%"></div>
+                </div>
+                <div class="health-value">{heroInfo.health}</div>
+              </div>
+              
+              <div class="hero-list-meta">
+                <span class="level-badge">LVL {heroInfo.level}</span>
+                <span class="damage-badge">DMG {heroInfo.damage}</span>
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>
+      
+      <!-- Hero Details (right side) -->
+      {#if selectedHero}
+        {@const heroInfo = selectedHero.getDisplayInfo()}
         {@const healthPercent = parseInt(heroInfo.health.split('/')[0]) / parseInt(heroInfo.health.split('/')[1]) * 100}
         
-        <div class="hero hero-{hero.status}">
-          <div class="hero-header">
+        <div class="hero-details hero-{selectedHero.status}">
+          <div class="hero-detail-header">
             <h3>{heroInfo.name}</h3>
-            <div class="hero-status status-{hero.status}">
-              {#if hero.status === 'idle'}
+            <div class="hero-status {getStatusClass(selectedHero.status)}">
+              {#if selectedHero.status === 'idle'}
                 Idle
-              {:else if hero.status === 'exploring'}
-                {#if hero.inCombat}
-                  Exploring ({#if hero.dungeonId}
-                    {$heroes.find(h => h.id === hero.id)?.dungeonId ? 'In Combat' : ''}
+              {:else if selectedHero.status === 'exploring'}
+                {#if selectedHero.inCombat}
+                  Exploring ({#if selectedHero.dungeonId}
+                    {$heroes.find(h => h.id === selectedHero.id)?.dungeonId ? 'In Combat' : ''}
                   {/if})
                 {:else}
                   Exploring
                 {/if}
-              {:else if hero.status === 'healing'}
+              {:else if selectedHero.status === 'healing'}
                 Healing
               {/if}
             </div>
           </div>
           
-          <div class="hero-health">
+          <div class="hero-health detail-health">
             <div class="stat-label">Health:</div>
             <div class="health-value">{heroInfo.health}</div>
             <div class="progress-bar">
@@ -57,13 +150,13 @@
             </div>
           </div>
           
-          {#if hero.status === 'exploring' && hero.dungeonId}
-            {@const dungeon = hero.dungeonId}
+          {#if selectedHero.status === 'exploring' && selectedHero.dungeonId}
+            {@const dungeon = selectedHero.dungeonId}
             <div class="hero-dungeon-progress">
               <p><strong>Exploring:</strong> {dungeon}</p>
-              <p>Progress: {hero.dungeonProgress}</p>
+              <p>Progress: {selectedHero.dungeonProgress}</p>
               <div class="progress-bar">
-                <div class="progress-fill" style="width: {(hero.dungeonProgress / 10) * 100}%"></div>
+                <div class="progress-fill" style="width: {(selectedHero.dungeonProgress / 10) * 100}%"></div>
               </div>
             </div>
             
@@ -80,8 +173,8 @@
               </div>
             {/if}
 
-            {#if hero.inCombat}
-              {@const combatDetails = getCombatDetails(hero, $dungeons)}
+            {#if selectedHero.inCombat}
+              {@const combatDetails = getCombatDetails(selectedHero, $dungeons)}
               {#if combatDetails}
                 <div class="hero-combat-details">
                   <h4><span class="combat-icon">⚔️</span> In Combat</h4>
@@ -105,7 +198,7 @@
             </div>
             <div class="stat-item">
               <div class="stat-label">XP:</div>
-              <div class="stat-value">{hero.experience}/{hero.level * 100}</div>
+              <div class="stat-value">{selectedHero.experience}/{selectedHero.level * 100}</div>
             </div>
           </div>
 
@@ -139,13 +232,13 @@
             </div>
           </div>
         </div>
-      {/each}
-    {:else}
-      <div class="info-message">
-        <p>No heroes have joined your village yet. Upgrade your tent to attract heroes!</p>
-      </div>
-    {/if}
-  </div>
+      {/if}
+    </div>
+  {:else}
+    <div class="info-message">
+      <p>No heroes have joined your village yet. Upgrade your tent to attract heroes!</p>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -158,27 +251,116 @@
     border-bottom: 1px solid #ccc;
     padding-bottom: 0.5rem;
   }
-  
-  .heroes-list {
+
+  /* Layout for list-detail view */
+  .heroes-layout {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    grid-template-columns: 250px 1fr;
     gap: 1rem;
-    margin-top: 1rem;
+    height: calc(100vh - 160px);
+    max-height: 800px;
   }
   
-  .hero {
+  /* Heroes List (left side) */
+  .heroes-list {
+    background-color: #f8f8f8;
+    border-radius: 0.5rem;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  
+  .hero-list-item {
+    padding: 0.75rem;
+    border-bottom: 1px solid #eee;
+    background-color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .hero-list-item:hover {
+    background-color: #f0f8ff;
+  }
+  
+  .hero-list-item.selected {
+    background-color: #e6f0ff;
+    border-left: 4px solid #4a83ff;
+  }
+  
+  .hero-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .hero-list-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .hero-list-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .hero-health {
+    width: 100%;
+  }
+  
+  .hero-list-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+  }
+  
+  .level-badge, .damage-badge {
+    display: inline-block;
+    padding: 0.15rem 0.35rem;
+    border-radius: 0.25rem;
+    font-weight: bold;
+  }
+  
+  .level-badge {
+    background-color: #e6f0ff;
+    color: #4a83ff;
+  }
+  
+  .damage-badge {
+    background-color: #ffe6f0;
+    color: #ff4a83;
+  }
+  
+  /* Hero Details (right side) */
+  .hero-details {
     background-color: white;
     border-radius: 0.5rem;
-    padding: 1rem;
+    padding: 1.5rem;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
+    overflow-y: auto;
   }
   
-  .hero:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  .hero-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
   }
   
+  .hero-detail-header h3 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+  
+  .detail-health {
+    margin-bottom: 1rem;
+  }
+  
+  /* Common Styles */
   .hero-idle {
     border-left: 4px solid #ccc;
   }
@@ -191,23 +373,12 @@
     border-left: 4px solid #ff4a83;
   }
   
-  .hero-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.75rem;
-  }
-  
-  .hero-header h3 {
-    margin: 0;
-    font-size: 1.25rem;
-  }
-  
   .hero-status {
     font-size: 0.8rem;
     padding: 0.25rem 0.5rem;
     border-radius: 1rem;
     font-weight: bold;
+    white-space: nowrap;
   }
   
   .status-idle {
@@ -223,10 +394,6 @@
   .status-healing {
     background-color: #ffe6f0;
     color: #ff4a83;
-  }
-  
-  .hero-health {
-    margin-bottom: 0.75rem;
   }
   
   .progress-bar {
@@ -324,7 +491,7 @@
     font-weight: bold;
     font-size: 1.1rem;
   }
-    
+  
   .hero-sections {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -344,7 +511,7 @@
     align-items: center;
   }
   
-  .equipment-icon, .inventory-icon {
+  .equipment-icon, .inventory-icon, .combat-icon {
     margin-right: 0.5rem;
   }
   
@@ -375,10 +542,6 @@
     color: #ff7043;
   }
   
-  .combat-icon {
-    margin-right: 0.5rem;
-  }
-  
   .combat-row {
     display: flex;
     justify-content: space-between;
@@ -387,7 +550,6 @@
   }
   
   .info-message {
-    grid-column: 1 / -1;
     padding: 2rem;
     background-color: #f8f8f8;
     border-radius: 0.5rem;
@@ -396,6 +558,14 @@
   }
   
   @media (max-width: 768px) {
+    .heroes-layout {
+      grid-template-columns: 1fr;
+    }
+    
+    .heroes-list {
+      max-height: 300px;
+    }
+    
     .hero-sections {
       grid-template-columns: 1fr;
     }

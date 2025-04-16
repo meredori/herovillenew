@@ -47,6 +47,9 @@
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
+    color: #333; /* Ensure text visibility on light backgrounds */
+    /* Using the variable from app.css for font consistency */
+    font-family: var(--font-accent);
   }
   
   .tab-button:hover {

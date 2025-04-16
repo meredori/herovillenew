@@ -5,16 +5,19 @@
   
   // Import tab components
   import Tabs from './lib/components/Tabs.svelte';
+  import Resources from './lib/components/resources/Resources.svelte';
   import Town from './lib/components/town/Town.svelte';
   import Heroes from './lib/components/heroes/Heroes.svelte';
   import Dungeons from './lib/components/dungeons/Dungeons.svelte';
   import Apothecary from './lib/components/town/Apothecary.svelte';
+  import Blacksmith from './lib/components/town/Blacksmith.svelte';
   import GameLog from './lib/components/GameLog.svelte';
   
   // Game state
   let activeTab = 'town';
   let gameInitialized = false;
   let game;
+  let showGameMenu = false; // Track dropdown menu visibility
   const unsubscribe = gameStore.subscribe(value => game = value);
   
   // Initialize the game when the component mounts
@@ -28,7 +31,8 @@
     { id: 'town', label: 'Town' },
     { id: 'heroes', label: 'Heroes', condition: game?.buildings?.some(b => b.id === 'tent' && b.level > 0) },
     { id: 'dungeons', label: 'Dungeons', condition: game?.buildings?.some(b => b.id === 'tent' && b.level > 0) },
-    { id: 'apothecary', label: 'Apothecary', condition: game?.buildings?.some(b => b.id === 'apothecary' && b.level > 0) }
+    { id: 'apothecary', label: 'Apothecary', condition: game?.buildings?.some(b => b.id === 'apothecary' && b.level > 0) },
+    { id: 'blacksmith', label: 'Blacksmith', condition: game?.buildings?.some(b => b.id === 'blacksmith' && b.level > 0) }
   ] : [{ id: 'town', label: 'Town' }];
   
   // Filter tabs based on conditions
@@ -39,11 +43,28 @@
     activeTab = newTab;
   }
   
+  // Toggle game menu dropdown
+  function toggleGameMenu() {
+    showGameMenu = !showGameMenu;
+  }
+  
+  // Close menu when clicking outside
+  function handleClickOutside(event) {
+    const menu = document.getElementById('game-menu');
+    const button = document.getElementById('game-menu-button');
+    
+    if (showGameMenu && menu && !menu.contains(event.target) && 
+        button && !button.contains(event.target)) {
+      showGameMenu = false;
+    }
+  }
+  
   // Save, load, and reset game
   function saveGame() {
     if (gameInitialized && game?.saveLoadSystem) {
       game.saveLoadSystem.saveGame();
       game.log("Game saved successfully");
+      showGameMenu = false; // Close dropdown after action
     }
   }
   
@@ -56,6 +77,7 @@
       } else {
         game.log("No saved game found");
       }
+      showGameMenu = false; // Close dropdown after action
     }
   }
   
@@ -68,23 +90,38 @@
           return g;
         });
       }
+      showGameMenu = false; // Close dropdown after action
     }
   }
 </script>
+
+<svelte:window on:click={handleClickOutside}/>
 
 <main>
   <header>
     <h1>Heroville</h1>
     <div class="game-controls">
-      <button on:click={saveGame}>Save Game</button>
-      <button on:click={loadGame}>Load Game</button>
-      <button on:click={resetGame}>Reset Game</button>
+      <button id="game-menu-button" class="menu-button" on:click={toggleGameMenu}>
+        Game Menu ▼
+      </button>
+      {#if showGameMenu}
+        <div id="game-menu" class="dropdown-menu">
+          <button on:click={saveGame}>Save Game</button>
+          <button on:click={loadGame}>Load Game</button>
+          <button on:click={resetGame}>Reset Game</button>
+        </div>
+      {/if}
     </div>
   </header>
   
   <div class="game-container">
     <section class="game-content">
-      {#if gameInitialized && Tabs && Town && Heroes && Dungeons && Apothecary}
+      {#if gameInitialized && Resources && Tabs && Town && Heroes && Dungeons && Apothecary && Blacksmith}
+        <!-- Resources displayed above tabs, visible on all tab views -->
+        <div class="resources-container">
+          <Resources />
+        </div>
+        
         <Tabs {visibleTabs} {activeTab} on:tabChange={e => handleTabChange(e.detail)} />
         
         <div class="tab-content">
@@ -106,6 +143,11 @@
           <!-- Apothecary Tab -->
           {#if activeTab === 'apothecary' && Apothecary}
             <Apothecary />
+          {/if}
+          
+          <!-- Blacksmith Tab -->
+          {#if activeTab === 'blacksmith' && Blacksmith}
+            <Blacksmith />
           {/if}
         </div>
       {:else}
@@ -146,8 +188,60 @@
   }
   
   .game-controls {
+    position: relative;
+  }
+  
+  .menu-button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    font-weight: 500;
     display: flex;
+    align-items: center;
     gap: 0.5rem;
+    font-family: var(--font-accent);
+  }
+  
+  .menu-button:hover {
+    background-color: #0069d9;
+  }
+  
+  .dropdown-menu {
+    position: absolute;
+    top: calc(100% + 5px);
+    right: 0;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 0.25rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    min-width: 150px;
+    overflow: hidden;
+  }
+  
+  .dropdown-menu button {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.2s;
+    color: #333; /* Add text color to ensure visibility */
+    font-family: var(--font-accent);
+  }
+  
+  .dropdown-menu button:last-child {
+    border-bottom: none;
+  }
+  
+  .dropdown-menu button:hover {
+    background-color: #f5f5f5;
   }
   
   .game-container {
@@ -160,6 +254,10 @@
   .game-content {
     display: flex;
     flex-direction: column;
+  }
+  
+  .resources-container {
+    margin-bottom: 1rem;
   }
   
   .tab-content {
