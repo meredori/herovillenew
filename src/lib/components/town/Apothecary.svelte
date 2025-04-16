@@ -8,18 +8,16 @@
   // Use Consumables for the potions list
   const potions = Consumables.filter(c => c.type === 'potion');
 
-  let potionsInventory = {};
-  let unsubscribe;
-  // Subscribe to gameStore to get potion inventory reactively
-  unsubscribe = gameStore.subscribe(game => {
-    potionsInventory = game?.potions || {};
-  });
-  onDestroy(() => { if (unsubscribe) unsubscribe(); });
+  // Get current town potion inventory reactively
+  $: potionsInventory = $gameStore.potions || {};
+
+  // Ensure Svelte reactivity for resources
+  $: $resources;
 
   // Check if player can afford a potion
   function canAffordPotion(potion) {
     if (!potion.cost) return true;
-    
+    // Check all required resources, including monster parts
     return Object.entries(potion.cost).every(([resource, amount]) => {
       return $resources[resource] >= amount;
     });
@@ -106,7 +104,7 @@
         
         <button 
           class="brew-button"
-          disabled={!canAffordPotion(potion) || potion.disabled}
+          disabled={!canAffordPotion(potion)}
           on:click={() => brewPotion(potion)}
         >
           {potion.disabled ? 'Not Available' : 'Brew Potion'}
