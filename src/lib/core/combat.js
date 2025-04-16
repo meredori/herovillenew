@@ -74,30 +74,15 @@ class CombatSystem {
             const healPercentage = healthPotion ? healthPotion.effectAmount : 0.2; // Default to 20% if not found
             const healAmount = Math.floor(hero.maxHealth * healPercentage);
             
-            // Create a new hero instance with updated health using heal method
-            let updatedHero = hero.heal(healAmount);
-            console.log(`Using potion to heal ${healAmount} health. New health: ${updatedHero.health}`);
-            
-            // Create a new inventory object with decremented potions
-            const newPotions = { ...updatedHero.inventory.potions };
-            newPotions.health_potion = (newPotions.health_potion || 0) - 1;
-            
-            // Create final updated hero with new inventory
-            const HeroClass = hero.constructor;
-            updatedHero = new HeroClass(updatedHero.name);
-            Object.assign(updatedHero, hero, { 
-                health: updatedHero.health, 
-                inventory: {
-                    ...updatedHero.inventory,
-                    potions: newPotions
-                }
-            });
+            // Heal the hero in place
+            hero.heal(healAmount);
+            hero.inventory.potions.health_potion -= 1;
             
             return { 
                 action: 'heal', 
                 damage: 0, 
                 healed: healAmount,
-                updatedHero
+                updatedHero: hero
             };
         } else {
             // Attack

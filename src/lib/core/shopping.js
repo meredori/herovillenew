@@ -5,6 +5,7 @@
  */
 
 import { Consumables, getMaxStack, DEFAULT_MAX_POTIONS } from '../entities/consumable.js';
+import { calculateWeaponRepairCost, getAvailableWeapons, createWeapon, isWeaponBetter } from '../entities/weapon.js';
 
 class Shopping {
     constructor(game) {
@@ -65,8 +66,6 @@ class Shopping {
         let bought = false;
         
         try {
-            // Dynamic import to avoid circular dependencies
-            const { getAvailableWeapons, createWeapon, isWeaponBetter } = await import('../entities/weapon.js');
             
             const blacksmithLevel = this.game.buildings.find(b => b.id === 'blacksmith').level;
             const availableWeapons = getAvailableWeapons(blacksmithLevel);
@@ -99,32 +98,18 @@ class Shopping {
                 bought = true;
             }
             
-            // Get the hero's decision to find the target dungeon
-            const decision = hero.decideNextAction(this.game.dungeons, this.game);
-            
-            // Next: Check if we need to repair the current weapon
-            if (hero.equipment.weapon && decision.bestDungeon) {
-                // Import the calculation function to get the repair cost
+            // Use hero.nextShoppingDungeon to determine repair target
+            const shoppingDungeon = hero.nextShoppingDungeon;
+            if (hero.equipment.weapon && shoppingDungeon) {
                 const { calculateWeaponRepairCost } = await import('../entities/weapon.js');
-                
-                // Get repair cost
                 const repairCost = calculateWeaponRepairCost(hero.equipment.weapon);
-                
-                // For a dungeon, we'd like the weapon to have at least the dungeon length in durability
-                const desiredDurability = decision.bestDungeon.length;
-                
+                const desiredDurability = shoppingDungeon.length;
                 if (hero.equipment.weapon.durability < desiredDurability && hero.inventory.gold >= repairCost) {
-                    // Calculate number of points to repair (don't exceed max durability)
-                    const pointsToRepair = Math.min(
-                        desiredDurability - hero.equipment.weapon.durability,
-                        hero.equipment.weapon.maxDurability - hero.equipment.weapon.durability
-                    );
-                    
+                    const pointsToRepair = hero.equipment.weapon.maxDurability - hero.equipment.weapon.durability
                     if (pointsToRepair > 0) {
                         hero.inventory.gold -= repairCost;
                         this.game.resources.gold += repairCost;
                         hero.equipment.weapon.durability += pointsToRepair;
-                        
                         shoppingLog.push(`${hero.name} repaired their ${hero.equipment.weapon.name} for ${repairCost} gold.`);
                         bought = true;
                     }

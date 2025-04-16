@@ -110,8 +110,8 @@ class Game {
                 discovered: false,
                 discoveryCost: 20, // Cost in gold
                 difficulty: 2,
-                length: 15,
-                encounterRate: 0.4,
+                length: 10,
+                encounterRate: 0.3,
                 monsterType: 'Wolf',
                 variant: { name: 'Alpha', isPrefix: false, healthMultiplier: 2.0, damageMultiplier: 1.6 }
             }),

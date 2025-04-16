@@ -35,6 +35,7 @@ class Hero {
         this.dungeonProgress = 0; // Current progress in the dungeon (steps taken)
         this.dungeonSuccessChance = null; // Cached success chance for current dungeon
         this.hasShoppedForUpgrades = false; // Track if hero has already shopped for upgrades
+        this.nextShoppingDungeon = null; // Track the next dungeon for shopping/repair
     }
 
     /**
@@ -76,34 +77,21 @@ class Hero {
     }
 
     /**
-     * Add experience to the hero (returns a new Hero instance)
+     * Add experience to the hero (mutates this Hero instance)
      * @param {number} amount - The amount of experience to add
      * @returns {Hero} Updated hero instance
      */
     addExperience(amount) {
-        let experience = this.experience + amount;
-        let level = this.level;
-        let maxHealth = this.maxHealth;
-        let health = this.health;
-        let hasShoppedForUpgrades = this.hasShoppedForUpgrades;
+        this.experience += amount;
         // Check for level up
-        const experienceNeeded = 100 * level;
-        if (experience >= experienceNeeded) {
-            level += 1;
-            maxHealth += 5;
-            health = maxHealth;
-            experience -= 100 * (level - 1);
-            hasShoppedForUpgrades = false;
+        const experienceNeeded = 100 * this.level;
+        if (this.experience >= experienceNeeded) {
+            this.level += 1;
+            this.maxHealth += 5;
+            this.health = this.maxHealth;
+            this.experience -= experienceNeeded;
         }
-        const updated = new Hero(this.name);
-        Object.assign(updated, this, {
-            experience,
-            level,
-            maxHealth,
-            health,
-            hasShoppedForUpgrades
-        });
-        return updated;
+        return this;
     }
 
     /**
@@ -166,55 +154,34 @@ class Hero {
     }
 
     /**
-     * Take damage (returns a new Hero instance)
+     * Take damage (mutates this Hero instance)
      * @param {number} amount - The amount of damage to take
-     * @returns {Hero} Updated hero instance
+     * @returns {Hero} This hero instance
      */
     takeDamage(amount) {
-        let health = Math.max(0, this.health - amount);
-        let status = this.status;
-        let inventory = { ...this.inventory };
-        let experience = this.experience;
-        if (health <= 0 && status === "exploring") {
+        this.health = Math.max(0, this.health - amount);
+        if (this.health <= 0 && this.status === "exploring") {
             // On defeat, reset progress and inventory
-            health = 0;
-            status = "idle";
-            inventory.gold = 0;
-            inventory.monsterParts = 0;
-            experience = 0;
+            this.health = 0;
+            this.status = "idle";
+            this.inventory.gold = 0;
+            this.inventory.monsterParts = 0;
+            this.experience = 0;
         }
-        const updated = new Hero(this.name);
-        Object.assign(updated, this, {
-            health,
-            status,
-            inventory,
-            experience
-        });
-        return updated;
+        return this;
     }
 
     /**
-     * Heal the hero (returns a new Hero instance)
+     * Heal the hero (mutates this Hero instance)
      * @param {number} amount - The amount to heal
-     * @returns {Hero} Updated hero instance
+     * @returns {Hero} This hero instance
      */
     heal(amount) {
-        // Calculate the new health by adding amount, but not exceeding maxHealth
-        const newHealth = Math.min(this.maxHealth, this.health + amount);
-        // Update status to idle if fully healed and was healing
-        const newStatus = (newHealth >= this.maxHealth && this.status === "healing") ? "idle" : this.status;
-        
-        // Create a new hero instance
-        const updated = new Hero(this.name);
-        
-        // Copy all properties from the current hero to the new instance
-        Object.assign(updated, this);
-        
-        // Then specifically set the new health and status
-        updated.health = newHealth;
-        updated.status = newStatus;
-        
-        return updated;
+        this.health = Math.min(this.maxHealth, this.health + amount);
+        if (this.health >= this.maxHealth && this.status === "healing") {
+            this.status = "idle";
+        }
+        return this;
     }
 
     /**
@@ -238,27 +205,20 @@ class Hero {
     }
 
     /**
-     * Set the hero's status (returns a new Hero instance)
+     * Set the hero's status (mutates this Hero instance)
      * @param {string} status - New status
      * @param {string|null} dungeonId - ID of the dungeon (if status is "exploring")
      * @returns {Hero} Updated hero instance
      */
     setStatus(status, dungeonId = null) {
-        let inCombat = this.inCombat;
-        let hasShoppedForUpgrades = this.hasShoppedForUpgrades;
         if (status !== "exploring") {
-            inCombat = false;
+            this.inCombat = false;
         } else {
-            hasShoppedForUpgrades = false; // Reset when entering a dungeon
+            this.hasShoppedForUpgrades = false; // Reset when entering a dungeon
         }
-        const updated = new Hero(this.name);
-        Object.assign(updated, this, {
-            status,
-            dungeonId: status === "exploring" ? dungeonId : null,
-            inCombat,
-            hasShoppedForUpgrades
-        });
-        return updated;
+        this.status = status;
+        this.dungeonId = status === "exploring" ? dungeonId : null;
+        return this;
     }
 
     /**
@@ -294,6 +254,7 @@ class Hero {
         // Priority 1: Heal if not at full health
         if (this.health < this.maxHealth) {
             this.setStatus("healing");
+            this.nextShoppingDungeon = null;
             return { action: "healing", target: null };
         }
         
@@ -307,7 +268,7 @@ class Hero {
             
             for (const dungeon of availableDungeons) {
                 const successChance = this.calculateDungeonSuccessChance(dungeon);
-                
+                console.log(`Success chance for ${this.name} in ${dungeon.name}: ${successChance}%`);
                 // For dungeons with >50% success chance, pick the strongest
                 if (successChance >= 50 && (bestDungeon === null || dungeon.difficulty > bestDungeon.difficulty)) {
                     bestDungeon = dungeon;
@@ -320,22 +281,15 @@ class Hero {
                 }
             }
         }
-        
+
         // Priority 2: Shop for upgrades if hasn't done so since last level up
         if (!this.hasShoppedForUpgrades) {
-            // Mark as shopped before we make any weapon/shopping decisions
             this.hasShoppedForUpgrades = true;
-            
-            // Shopping will now include checking for weapons and repairs
-            // The game.js will handle the actual purchase and repairs
+            this.dungeonSuccessChance = null;
+            this.nextShoppingDungeon = bestDungeon;
             return { 
                 action: "shopping", 
                 target: null,
-                bestDungeon: bestDungeon ? {
-                    id: bestDungeon.id,
-                    length: bestDungeon.length,
-                    difficulty: bestDungeon.difficulty
-                } : null
             };
         }
         
@@ -347,10 +301,13 @@ class Hero {
                 this.setStatus("exploring", bestDungeon.id);
             }
             this.dungeonSuccessChance = highestSuccessChance; // Store success chance
+            this.nextShoppingDungeon = null;
             return { action: "exploring", target: bestDungeon.id };
         }
         
         // If no viable dungeon found, stay idle
+        this.dungeonSuccessChance = null;
+        this.nextShoppingDungeon = null;
         return { action: "idle", target: null };
     }
 
