@@ -4,6 +4,14 @@
   import { get } from 'svelte/store';
   import { onDestroy } from 'svelte';
   import { Weapons, getAvailableWeapons, calculateWeaponRepairCost } from '../../entities/weapon.js';
+  
+  // Import shared components
+  import ItemCard from '../shared/ItemCard.svelte';
+  import StatItem from '../shared/StatItem.svelte';
+  import ResourceCost from '../shared/ResourceCost.svelte';
+  import CostsList from '../shared/CostsList.svelte';
+  import HeroCard from '../shared/HeroCard.svelte';
+  import ProgressBar from '../shared/ProgressBar.svelte';
 
   // Get the blacksmith building
   $: blacksmith = $buildings.find(b => b.id === 'blacksmith') || { level: 0 };
@@ -50,13 +58,6 @@
       return game;
     });
   }
-  
-  // Get the color for stock display
-  function getStockColor(count) {
-    if (count >= 5) return 'high-stock';
-    if (count >= 2) return 'medium-stock';
-    return 'low-stock';
-  }
 </script>
 
 <div class="blacksmith-container">
@@ -75,56 +76,45 @@
     <h3>Craft Weapons</h3>
     <div class="weapons-grid">
       {#each availableWeapons as weapon}
-        <div class="weapon-card">
-          <div class="weapon-header">
-            <h4>{weapon.name}</h4>
-            <div class="weapon-stock {getStockColor(weaponStock[weapon.id] || 0)}">
-              Stock: {weaponStock[weapon.id] || 0}
-            </div>
+        <ItemCard
+          item={weapon}
+          stock={weaponStock[weapon.id] || 0}
+          themeColor="#7c5e2a"
+          buttonText="Craft Weapon"
+          buttonDisabled={!canAffordToCraft(weapon)}
+          onButtonClick={() => craftWeapon(weapon.id)}
+        >
+          <div slot="stats">
+            <StatItem 
+              icon="⚔️"
+              label="Damage:"
+              value={`${weapon.minDamage}-${weapon.maxDamage}`}
+            />
+            <StatItem 
+              icon="🛡️"
+              label="Durability:"
+              value={weapon.maxDurability}
+            />
           </div>
           
-          <p class="weapon-description">{weapon.description}</p>
-          
-          <div class="weapon-stats">
-            <div class="stat-item">
-              <span class="stat-icon">⚔️</span>
-              <span class="stat-label">Damage:</span>
-              <span class="stat-value">{weapon.minDamage}-{weapon.maxDamage}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-icon">🛡️</span>
-              <span class="stat-label">Durability:</span>
-              <span class="stat-value">{weapon.maxDurability}</span>
-            </div>
+          <div slot="costs">
+            <CostsList title="Cost to Craft:">
+              <ResourceCost 
+                resourceName="Monster Parts"
+                amount={weapon.cost.monsterParts}
+                icon="🦴"
+              />
+            </CostsList>
+            
+            <CostsList title="Hero Purchase Price:">
+              <ResourceCost 
+                resourceName="Gold"
+                amount={weapon.salePrice}
+                icon="🪙"
+              />
+            </CostsList>
           </div>
-          
-          <div class="weapon-cost">
-            <p>Cost to Craft:</p>
-            <ul class="cost-list">
-              <li>
-                <span class="resource-icon">🦴</span>
-                <span class="resource-name">Monster Parts: </span>
-                <span class="resource-amount">{weapon.cost.monsterParts}</span>
-              </li>
-            </ul>
-            <p>Hero Purchase Price:</p>
-            <ul class="cost-list">
-              <li>
-                <span class="resource-icon">🪙</span>
-                <span class="resource-name">Gold: </span>
-                <span class="resource-amount">{weapon.salePrice}</span>
-              </li>
-            </ul>
-          </div>
-          
-          <button 
-            class="craft-button" 
-            disabled={!canAffordToCraft(weapon)}
-            on:click={() => craftWeapon(weapon.id)}
-          >
-            Craft Weapon
-          </button>
-        </div>
+        </ItemCard>
       {/each}
     </div>
     
@@ -154,16 +144,10 @@
                       <p class="durability-label">
                         Durability: {hero.equipment.weapon.durability}/{hero.equipment.weapon.maxDurability}
                       </p>
-                      <div class="durability-bar">
-                        <div 
-                          class="durability-fill {
-                            hero.equipment.weapon.durability > hero.equipment.weapon.maxDurability * 0.66 ? 'high-durability' :
-                            hero.equipment.weapon.durability > hero.equipment.weapon.maxDurability * 0.33 ? 'medium-durability' :
-                            'low-durability'
-                          }" 
-                          style="width: {(hero.equipment.weapon.durability / hero.equipment.weapon.maxDurability) * 100}%"
-                        ></div>
-                      </div>
+                      <ProgressBar 
+                        value={(hero.equipment.weapon.durability / hero.equipment.weapon.maxDurability) * 100} 
+                        showStatusColors={true}
+                      />
                     </div>
                   </div>
                 {:else}
@@ -181,6 +165,9 @@
 <style>
   .blacksmith-container {
     padding: 0.5rem;
+    width: 100% - 0.25rem;
+    max-width: 1200px;
+    margin: 0 auto;
   }
   
   h2 {
@@ -214,148 +201,14 @@
   
   .weapons-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 1.5rem;
     margin-top: 1rem;
   }
   
-  .weapon-card {
-    background-color: white;
-    border-radius: 0.5rem;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
-    border-left: 4px solid #7c5e2a;
-  }
-  
-  .weapon-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-  }
-  
-  .weapon-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-  }
-  
-  .weapon-header h4 {
-    margin: 0;
-    color: #7c5e2a;
-    font-size: 1.2rem;
-  }
-  
-  .weapon-stock {
-    font-size: 0.8rem;
-    font-weight: bold;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-  }
-  
-  .high-stock {
-    background-color: #4caf50;
-    color: white;
-  }
-  
-  .medium-stock {
-    background-color: #ff9800;
-    color: white;
-  }
-  
-  .low-stock {
-    background-color: #f44336;
-    color: white;
-  }
-  
-  .weapon-description {
-    margin-bottom: 1rem;
-    color: #555;
-  }
-  
-  .weapon-stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-  }
-  
-  .stat-item {
-    display: flex;
-    align-items: center;
-    padding: 0.5rem 0.75rem;
-    background-color: #f8f8f8;
-    border-radius: 0.25rem;
-    font-size: 0.9rem;
-  }
-  
-  .stat-icon {
-    margin-right: 0.5rem;
-  }
-  
-  .stat-label {
-    color: #666;
-    margin-right: 0.5rem;
-  }
-  
-  .stat-value {
-    font-weight: bold;
-  }
-  
-  .weapon-cost p {
-    margin: 0 0 0.5rem 0;
-    font-weight: bold;
-    color: #666;
-  }
-  
-  .cost-list {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 1rem 0;
-  }
-  
-  .cost-list li {
-    display: flex;
-    align-items: center;
-    margin-bottom: 0.25rem;
-  }
-  
-  .resource-icon {
-    margin-right: 0.5rem;
-  }
-  
-  .resource-name {
-    text-transform: capitalize;
-  }
-  
-  .resource-amount {
-    font-weight: bold;
-    margin-left: 0.25rem;
-  }
-  
-  .craft-button {
-    width: 100%;
-    padding: 0.5rem;
-    background-color: #7c5e2a;
-    color: white;
-    border: none;
-    border-radius: 0.25rem;
-    font-size: 0.9rem;
-    cursor: pointer;
-  }
-  
-  .craft-button:hover:not([disabled]) {
-    background-color: #9c7e4a;
-  }
-  
-  .craft-button[disabled] {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
-  
   .heroes-equipment {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 1.5rem;
     margin-top: 1rem;
   }
@@ -433,29 +286,6 @@
     font-size: 0.9rem;
   }
   
-  .durability-bar {
-    height: 0.5rem;
-    background-color: #eee;
-    border-radius: 0.25rem;
-    overflow: hidden;
-  }
-  
-  .durability-fill {
-    height: 100%;
-  }
-  
-  .high-durability {
-    background-color: #4caf50;
-  }
-  
-  .medium-durability {
-    background-color: #ff9800;
-  }
-  
-  .low-durability {
-    background-color: #f44336;
-  }
-  
   .no-weapon {
     color: #999;
     font-style: italic;
@@ -463,7 +293,16 @@
     text-align: center;
   }
   
+  @media (max-width: 1200px) {
+    .weapons-grid,
+    .heroes-equipment {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  
   @media (max-width: 768px) {
+    .weapons-grid,
+    .heroes-equipment,
     .equipment-section {
       grid-template-columns: 1fr;
     }

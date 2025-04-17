@@ -2,6 +2,8 @@
 <script>
   import gameStore, { dungeons } from '../../core/gameStore.js';
   import { resources, heroes } from '../../core/gameStore.js';
+  import ProgressBar from '../shared/ProgressBar.svelte';
+  import StatItem from '../shared/StatItem.svelte';
   
   // Handle dungeon discovery
   function discoverDungeon(dungeonId) {
@@ -48,16 +50,16 @@
             <p class="dungeon-description">{dungeon.description}</p>
             
             <div class="dungeon-stats">
-              <div class="stat-item">
-                <span class="stat-icon">🗺️</span>
-                <span class="stat-label">Length:</span>
-                <span class="stat-value">{dungeon.length} steps</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-icon">⚔️</span>
-                <span class="stat-label">Encounter Rate:</span>
-                <span class="stat-value">{Math.floor(dungeon.encounterRate * 100)}%</span>
-              </div>
+              <StatItem 
+                icon="🗺️"
+                label="Length:"
+                value={`${dungeon.length} steps`}
+              />
+              <StatItem 
+                icon="⚔️"
+                label="Encounter Rate:"
+                value={`${Math.floor(dungeon.encounterRate * 100)}%`}
+              />
             </div>
             
             <div class="dungeon-monsters">
@@ -92,7 +94,7 @@
                         {heroInfo.name} 
                         {#if hero.inCombat}<span class="combat-indicator">⚔️</span>{/if}
                         <span class="hero-health-mini">
-                          <span class="health-fill" style="width: {healthPercent}%"></span>
+                          <ProgressBar value={healthPercent} height="6px" />
                         </span>
                       </li>
                     {/each}
@@ -149,6 +151,9 @@
 <style>
   .dungeons-container {
     padding: 0.5rem;
+    width: 100% - 0.25rem;
+    max-width: 1200px;
+    margin: 0 auto;
   }
   
   h2 {
@@ -159,15 +164,16 @@
   
   .dungeons-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
     margin-top: 1rem;
+    width: 100%; /* Ensure full width */
   }
   
   .dungeon {
     background-color: white;
     border-radius: 0.5rem;
-    padding: 1rem;
+    padding: 1.25rem;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     transition: transform 0.2s, box-shadow 0.2s;
   }
@@ -226,28 +232,6 @@
     gap: 1rem;
     margin-bottom: 1rem;
     flex-wrap: wrap;
-  }
-  
-  .stat-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background-color: #f8f8f8;
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.25rem;
-    font-size: 0.9rem;
-  }
-  
-  .stat-icon {
-    font-size: 1.1rem;
-  }
-  
-  .stat-label {
-    color: #666;
-  }
-  
-  .stat-value {
-    font-weight: bold;
   }
   
   .dungeon-monsters {
@@ -326,19 +310,6 @@
   .hero-health-mini {
     margin-left: auto;
     width: 60px;
-    height: 6px;
-    background-color: #ddd;
-    border-radius: 3px;
-    overflow: hidden;
-    position: relative;
-  }
-  
-  .hero-health-mini .health-fill {
-    position: absolute;
-    height: 100%;
-    background-color: #4caf50;
-    left: 0;
-    top: 0;
   }
   
   .discovery-info {
@@ -399,7 +370,17 @@
     color: #666;
   }
   
+  @media (max-width: 1200px) {
+    .dungeons-list {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  
   @media (max-width: 768px) {
+    .dungeons-list {
+      grid-template-columns: 1fr;
+    }
+    
     .dungeon-monsters {
       grid-template-columns: 1fr;
     }

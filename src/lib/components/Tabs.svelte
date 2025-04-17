@@ -36,10 +36,11 @@
   .tabs-nav {
     display: flex;
     border-bottom: 1px solid #ccc;
+    justify-content: flex-start;
   }
   
   .tab-button {
-    padding: 0.75rem 1.5rem;
+    padding: 0.75rem 1rem;
     background: none;
     border: none;
     border-bottom: 3px solid transparent;
@@ -50,6 +51,13 @@
     color: #333; /* Ensure text visibility on light backgrounds */
     /* Using the variable from app.css for font consistency */
     font-family: var(--font-accent);
+    flex: 1;
+    max-width: 140px;
+    min-width: 140px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
   .tab-button:hover {

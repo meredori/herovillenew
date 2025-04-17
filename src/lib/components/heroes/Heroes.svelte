@@ -3,6 +3,11 @@
   import { heroes, dungeons } from '../../core/gameStore.js';
   import { Consumables } from '../../entities/consumable.js';
   import { onMount } from 'svelte';
+  
+  // Import shared components
+  import HeroCard from '../shared/HeroCard.svelte';
+  import ProgressBar from '../shared/ProgressBar.svelte';
+  import StatItem from '../shared/StatItem.svelte';
 
   // Track the currently selected hero
   let selectedHeroId = null;
@@ -76,6 +81,13 @@
     }
     return hero.status;
   }
+  
+  // Get hero theme color based on status
+  function getHeroThemeColor(status) {
+    if (status === 'exploring') return '#4a83ff';
+    if (status === 'healing') return '#ff4a83';
+    return '#7c7c7c'; // idle
+  }
 </script>
 
 <div class="heroes-container">
@@ -102,9 +114,7 @@
             
             <div class="hero-list-stats">
               <div class="hero-health">
-                <div class="progress-bar">
-                  <div class="progress-fill health-fill" style="width: {healthPercent}%"></div>
-                </div>
+                <ProgressBar value={healthPercent} />
                 <div class="health-value">{heroInfo.health}</div>
               </div>
               
@@ -120,115 +130,260 @@
       <!-- Hero Details (right side) -->
       {#if selectedHero}
         {@const heroInfo = selectedHero.getDisplayInfo()}
-        {@const healthPercent = parseInt(heroInfo.health.split('/')[0]) / parseInt(heroInfo.health.split('/')[1]) * 100}
+        {@const themeColor = getHeroThemeColor(selectedHero.status)}
         
-        <div class="hero-details hero-{selectedHero.status}">
-          <div class="hero-detail-header">
-            <h3>{heroInfo.name}</h3>
-            <div class="hero-status {getStatusClass(selectedHero.status)}">
-              {#if selectedHero.status === 'idle'}
-                Idle
-              {:else if selectedHero.status === 'exploring'}
+        <div class="hero-details-container">
+          <div class="character-sheet">
+            <!-- Header section with hero name and basic info -->
+            <div class="character-header">
+              <div class="character-title">
+                <h3>{heroInfo.name}</h3>
+                <div class="hero-status-badge {getStatusClass(selectedHero.status)}">{getStatusLabel(selectedHero)}</div>
+              </div>
+              
+              <div class="character-vitals">
+                <div class="vital-item">
+                  <div class="vital-label">Level</div>
+                  <div class="vital-value">{heroInfo.level}</div>
+                </div>
+                <div class="vital-item">
+                  <div class="vital-label">Health</div>
+                  <div class="vital-value">{heroInfo.health}</div>
+                </div>
+                <div class="vital-item">
+                  <div class="vital-label">XP</div>
+                  <div class="vital-value">{heroInfo.experience}/{heroInfo.level * 100}</div>
+                </div>
+              </div>
+              
+              <div class="health-bar">
+                {#if typeof heroInfo.health === 'string'}
+                  {@const [current, max] = heroInfo.health.split('/').map(Number)}
+                  {@const healthPercent = (current / max) * 100}
+                  <ProgressBar value={healthPercent} color="#4caf50" />
+                {/if}
+              </div>
+            </div>
+            
+            <!-- Main character sheet grid -->
+            <div class="character-sheet-grid">
+              <!-- Stats section -->
+              <div class="character-section">
+                <div class="section-header">
+                  <h4>Character Stats</h4>
+                </div>
+                <div class="stats-grid">
+                  <div class="stat-block">
+                    <div class="stat-icon">⚔️</div>
+                    <div class="stat-details">
+                      <div class="stat-name">Damage</div>
+                      <div class="stat-value">{heroInfo.damage || 'Unknown'}</div>
+                    </div>
+                  </div>
+                  
+                  <div class="stat-block">
+                    <div class="stat-icon">🏃</div>
+                    <div class="stat-details">
+                      <div class="stat-name">Class</div>
+                      <div class="stat-value">{heroInfo.class || 'Adventurer'}</div>
+                    </div>
+                  </div>
+                  
+                  <div class="stat-block">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-details">
+                      <div class="stat-name">Kills</div>
+                      <div class="stat-value">{selectedHero.stats?.kills || 0}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Combat/Status section - always visible -->
+              <div class="character-section">
+                <div class="section-header">
+                  <h4>Status & Combat</h4>
+                </div>
+                
                 {#if selectedHero.inCombat}
-                  Exploring ({#if selectedHero.dungeonId}
-                    {$heroes.find(h => h.id === selectedHero.id)?.dungeonId ? 'In Combat' : ''}
-                  {/if})
+                  <!-- Combat Information -->
+                  {@const combatDetails = getCombatDetails(selectedHero, $dungeons)}
+                  {#if combatDetails}
+                    <div class="combat-information">
+                      <div class="combat-header">
+                        <div class="combat-icon">⚔️</div>
+                        <div class="combat-title">In Combat</div>
+                        <div class="combat-round">Round {combatDetails.combatRound}</div>
+                      </div>
+                      
+                      <div class="enemy-details">
+                        <div class="enemy-name">
+                          {combatDetails.monsterName} {combatDetails.isVariant ? '(Boss)' : ''}
+                        </div>
+                        
+                        <div class="enemy-health">
+                          {#if combatDetails.monsterHealth}
+                            {@const [current, max] = combatDetails.monsterHealth.split('/').map(Number)}
+                            {@const healthPercent = (current / max) * 100}
+                            <div class="health-label">
+                              <span>Enemy Health:</span>
+                              <span>{combatDetails.monsterHealth}</span>
+                            </div>
+                            <ProgressBar value={healthPercent} color="#ff7043" />
+                          {/if}
+                        </div>
+                        
+                        <div class="enemy-stats">
+                          <div class="enemy-stat">
+                            <span class="enemy-stat-label">DMG:</span>
+                            <span class="enemy-stat-value">{combatDetails.monsterDamage}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  {/if}
+                {:else if selectedHero.status === 'exploring'}
+                  <!-- Exploration Information -->
+                  {@const dungeon = $dungeons.find(d => d.id === selectedHero.dungeonId)}
+                  {#if dungeon}
+                    <div class="exploration-information">
+                      <div class="exploration-header">
+                        <div class="exploration-icon">🗺️</div>
+                        <div class="exploration-title">Exploring Dungeon</div>
+                      </div>
+                      
+                      <div class="dungeon-details">
+                        <div class="dungeon-name">{dungeon.name}</div>
+                        <div class="dungeon-progress">
+                          <div class="progress-label">Progress: {selectedHero.dungeonProgress}/10</div>
+                          <ProgressBar value={(selectedHero.dungeonProgress / 10) * 100} color="#4a83ff" />
+                        </div>
+                        
+                        {#if selectedHero.dungeonSuccessChance !== null}
+                          <div class="success-chance">
+                            <div class="chance-label">Success Chance:</div>
+                            <div class="chance-value">
+                              {#if selectedHero.dungeonSuccessChance > 75}
+                                <span class="chance high-chance">{selectedHero.dungeonSuccessChance}%</span>
+                              {:else if selectedHero.dungeonSuccessChance > 50}
+                                <span class="chance medium-chance">{selectedHero.dungeonSuccessChance}%</span>
+                              {:else if selectedHero.dungeonSuccessChance > 25}
+                                <span class="chance low-chance">{selectedHero.dungeonSuccessChance}%</span>
+                              {:else}
+                                <span class="chance very-low-chance">{selectedHero.dungeonSuccessChance}%</span>
+                              {/if}
+                            </div>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                  {/if}
+                {:else if selectedHero.status === 'healing'}
+                  <!-- Healing Information -->
+                  <div class="healing-information">
+                    <div class="healing-header">
+                      <div class="healing-icon">❤️</div>
+                      <div class="healing-title">Healing</div>
+                    </div>
+                    
+                    <div class="healing-details">
+                      <p>This hero is currently resting to recover health.</p>
+                      <p class="healing-estimate">Healing at approximately 1 HP per game tick.</p>
+                    </div>
+                  </div>
                 {:else}
-                  Exploring
+                  <!-- Idle Information -->
+                  <div class="idle-information">
+                    <div class="idle-header">
+                      <div class="idle-icon">💤</div>
+                      <div class="idle-title">Idle</div>
+                    </div>
+                    
+                    <div class="idle-details">
+                      <p>This hero is currently idle in town.</p>
+                      <p class="idle-estimate">Will automatically choose an action when ready.</p>
+                    </div>
+                  </div>
                 {/if}
-              {:else if selectedHero.status === 'healing'}
-                Healing
-              {/if}
-            </div>
-          </div>
-          
-          <div class="hero-health detail-health">
-            <div class="stat-label">Health:</div>
-            <div class="health-value">{heroInfo.health}</div>
-            <div class="progress-bar">
-              <div class="progress-fill health-fill" style="width: {healthPercent}%"></div>
-            </div>
-          </div>
-          
-          {#if selectedHero.status === 'exploring' && selectedHero.dungeonId}
-            {@const dungeon = selectedHero.dungeonId}
-            <div class="hero-dungeon-progress">
-              <p><strong>Exploring:</strong> {dungeon}</p>
-              <p>Progress: {selectedHero.dungeonProgress}</p>
-              <div class="progress-bar">
-                <div class="progress-fill" style="width: {(selectedHero.dungeonProgress / 10) * 100}%"></div>
               </div>
-            </div>
-            
-            {#if heroInfo.dungeonSuccessChance !== null}
-              {@const chanceClass = 
-                heroInfo.dungeonSuccessChance > 75 ? 'high-chance' : 
-                heroInfo.dungeonSuccessChance > 50 ? 'medium-chance' : 
-                heroInfo.dungeonSuccessChance > 25 ? 'low-chance' : 'very-low-chance'}
-              <div class="hero-success-chance">
-                <p>Success Chance: <span class="chance {chanceClass}">{heroInfo.dungeonSuccessChance}%</span></p>
-                <div class="progress-bar">
-                  <div class="progress-fill {chanceClass}" style="width: {heroInfo.dungeonSuccessChance}%"></div>
+              
+              <!-- Equipment section -->
+              <div class="character-section">
+                <div class="section-header">
+                  <h4>Equipment</h4>
+                </div>
+                <div class="equipment-slots">
+                  <div class="equipment-slot">
+                    <div class="slot-icon">⚔️</div>
+                    <div class="slot-details">
+                      <div class="slot-name">Weapon</div>
+                      <div class="slot-value">
+                        {#if heroInfo.equipment?.weapon}
+                          {heroInfo.equipment.weapon.name}
+                          {#if heroInfo.equipment.weapon.durability !== undefined}
+                            <span class="durability">
+                              ({heroInfo.equipment.weapon.durability}/{heroInfo.equipment.weapon.maxDurability})
+                            </span>
+                          {/if}
+                        {:else}
+                          None
+                        {/if}
+                      </div>
+                      {#if heroInfo.equipment?.weapon}
+                        <div class="slot-stats">DMG: {heroInfo.equipment.weapon.minDamage}-{heroInfo.equipment.weapon.maxDamage}</div>
+                      {/if}
+                    </div>
+                  </div>
+                  
+                  <div class="equipment-slot">
+                    <div class="slot-icon">🛡️</div>
+                    <div class="slot-details">
+                      <div class="slot-name">Armor</div>
+                      <div class="slot-value">{heroInfo.equipment?.armor || 'None'}</div>
+                    </div>
+                  </div>
+                  
+                  <div class="equipment-slot">
+                    <div class="slot-icon">💍</div>
+                    <div class="slot-details">
+                      <div class="slot-name">Accessory</div>
+                      <div class="slot-value">{heroInfo.equipment?.accessory || 'None'}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            {/if}
-
-            {#if selectedHero.inCombat}
-              {@const combatDetails = getCombatDetails(selectedHero, $dungeons)}
-              {#if combatDetails}
-                <div class="hero-combat-details">
-                  <h4><span class="combat-icon">⚔️</span> In Combat</h4>
-                  <div class="combat-row"><span>Enemy:</span> <span>{combatDetails.monsterName} {combatDetails.isVariant ? '(Boss)' : ''}</span></div>
-                  <div class="combat-row"><span>Enemy HP:</span> <span>{combatDetails.monsterHealth}</span></div>
-                  <div class="combat-row"><span>Enemy Damage:</span> <span>{combatDetails.monsterDamage}</span></div>
-                  <div class="combat-row"><span>Combat Round:</span> <span>{combatDetails.combatRound}</span></div>
+              
+              <!-- Inventory section -->
+              <div class="character-section">
+                <div class="section-header">
+                  <h4>Inventory</h4>
                 </div>
-              {/if}
-            {/if}
-          {/if}
-          
-          <div class="hero-stats-grid">
-            <div class="stat-item">
-              <div class="stat-label">Damage:</div>
-              <div class="stat-value">{heroInfo.damage}</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-label">Level:</div>
-              <div class="stat-value">{heroInfo.level}</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-label">XP:</div>
-              <div class="stat-value">{selectedHero.experience}/{selectedHero.level * 100}</div>
-            </div>
-          </div>
-
-          <div class="hero-sections">
-            <div class="hero-equipment">
-              <h4><span class="equipment-icon">⚔️</span> Equipment</h4>
-              <ul class="equipment-list">
-                <li>Weapon: {heroInfo.equipment.weapon}</li>
-                <li>Armor: {heroInfo.equipment.armor}</li>
-                <li>Accessory: {heroInfo.equipment.accessory}</li>
-              </ul>
-            </div>
-            
-            <div class="hero-inventory">
-              <h4><span class="inventory-icon">🎒</span> Inventory</h4>
-              <ul class="inventory-list">
-                <li><span title="Gold" aria-label="Gold">🪙</span> Gold: {heroInfo.inventory.gold}</li>
-                <li><span title="Monster Parts" aria-label="Monster Parts">🦴</span> Monster Parts: {heroInfo.inventory.monsterParts}</li>
-                {#if heroInfo.inventory.potions}
-                  {#each Object.entries(heroInfo.inventory.potions) as [potionId, qty]}
-                    {#if qty > 0}
-                      {@const potion = Consumables.find(c => c.id === potionId) || null}
-                      <li>
-                        <span title={potion ? potion.name : potionId} aria-label={potion ? potion.name : potionId}>{potion ? potion.icon : '🧪'}</span>
-                        {potion ? potion.name : potionId}: {qty}
-                      </li>
-                    {/if}
-                  {/each}
-                {/if}
-              </ul>
+                <div class="inventory-slots">
+                  <div class="inventory-row">
+                    <div class="inventory-icon">🪙</div>
+                    <div class="inventory-name">Gold</div>
+                    <div class="inventory-value">{heroInfo.inventory?.gold || 0}</div>
+                  </div>
+                  
+                  <div class="inventory-row">
+                    <div class="inventory-icon">🦴</div>
+                    <div class="inventory-name">Monster Parts</div>
+                    <div class="inventory-value">{heroInfo.inventory?.monsterParts || 0}</div>
+                  </div>
+                  
+                  {#if heroInfo.inventory?.potions && typeof heroInfo.inventory.potions === 'object'}
+                    {#each Object.entries(heroInfo.inventory.potions) as [potionId, qty]}
+                      {#if qty > 0}
+                        <div class="inventory-row">
+                          <div class="inventory-icon">🧪</div>
+                          <div class="inventory-name">{potionId}</div>
+                          <div class="inventory-value">{qty}</div>
+                        </div>
+                      {/if}
+                    {/each}
+                  {/if}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -244,6 +399,9 @@
 <style>
   .heroes-container {
     padding: 0.5rem;
+    width: 100% - 0.25rem;
+    max-width: 1200px;
+    margin: 0 auto;
   }
   
   h2 {
@@ -255,9 +413,9 @@
   /* Layout for list-detail view */
   .heroes-layout {
     display: grid;
-    grid-template-columns: 250px 1fr;
-    gap: 1rem;
-    height: calc(100vh - 160px);
+    grid-template-columns: 320px 1fr;
+    gap: 2rem;
+    height: calc(100vh - 180px);
     max-height: 800px;
   }
   
@@ -336,217 +494,421 @@
   }
   
   /* Hero Details (right side) */
-  .hero-details {
-    background-color: white;
-    border-radius: 0.5rem;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  .hero-details-container {
     overflow-y: auto;
   }
   
-  .hero-detail-header {
+  .character-sheet {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background-color: #fff;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  
+  .character-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .character-title {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
   }
   
-  .hero-detail-header h3 {
-    margin: 0;
-    font-size: 1.5rem;
-  }
-  
-  .detail-health {
-    margin-bottom: 1rem;
-  }
-  
-  /* Common Styles */
-  .hero-idle {
-    border-left: 4px solid #ccc;
-  }
-  
-  .hero-exploring {
-    border-left: 4px solid #4a83ff;
-  }
-  
-  .hero-healing {
-    border-left: 4px solid #ff4a83;
-  }
-  
-  .hero-status {
-    font-size: 0.8rem;
+  .hero-status-badge {
     padding: 0.25rem 0.5rem;
-    border-radius: 1rem;
+    border-radius: 0.25rem;
     font-weight: bold;
-    white-space: nowrap;
+    font-size: 0.85rem;
   }
   
-  .status-idle {
-    background-color: #eee;
+  .character-vitals {
+    display: flex;
+    gap: 1rem;
+  }
+  
+  .vital-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #f8f8f8;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+    flex: 1;
+  }
+  
+  .vital-label {
+    font-size: 0.75rem;
     color: #666;
   }
   
-  .status-exploring {
-    background-color: #e6f0ff;
+  .vital-value {
+    font-weight: bold;
+    font-size: 1rem;
+  }
+  
+  .health-bar {
+    margin-top: 0.5rem;
+  }
+  
+  .character-sheet-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  
+  .character-section {
+    background-color: #f8f8f8;
+    border-radius: 0.5rem;
+    padding: 1rem;
+  }
+  
+  .section-header {
+    margin-bottom: 0.5rem;
+  }
+  
+  .section-header h4 {
+    margin: 0;
+    font-size: 1.1rem;
     color: #4a83ff;
   }
   
-  .status-healing {
-    background-color: #ffe6f0;
-    color: #ff4a83;
-  }
-  
-  .progress-bar {
-    height: 0.5rem;
-    background-color: #eee;
-    border-radius: 0.25rem;
-    overflow: hidden;
-    margin-top: 0.25rem;
-  }
-  
-  .progress-fill {
-    height: 100%;
-    background-color: #4caf50;
-  }
-  
-  .health-fill {
-    background-color: #4caf50;
-  }
-  
-  .hero-dungeon-progress {
-    margin: 0.75rem 0;
-    padding: 0.75rem;
-    background-color: #f8f8f8;
-    border-radius: 0.25rem;
-  }
-  
-  .hero-dungeon-progress p {
-    margin: 0 0 0.5rem 0;
-  }
-  
-  .hero-success-chance {
-    margin-bottom: 0.75rem;
-  }
-  
-  .hero-success-chance p {
-    margin: 0 0 0.25rem 0;
-  }
-  
-  .chance {
-    font-weight: bold;
-  }
-  
-  .high-chance {
-    color: #4caf50;
-  }
-  
-  .medium-chance {
-    color: #ffab00;
-  }
-  
-  .low-chance {
-    color: #ff7043;
-  }
-  
-  .very-low-chance {
-    color: #f44336;
-  }
-  
-  .progress-fill.high-chance {
-    background-color: #4caf50;
-  }
-  
-  .progress-fill.medium-chance {
-    background-color: #ffab00;
-  }
-  
-  .progress-fill.low-chance {
-    background-color: #ff7043;
-  }
-  
-  .progress-fill.very-low-chance {
-    background-color: #f44336;
-  }
-  
-  .hero-stats-grid {
+  .stats-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
-    margin-bottom: 0.75rem;
   }
   
-  .stat-item {
-    padding: 0.5rem;
-    background-color: #f8f8f8;
+  .stat-block {
+    display: flex;
+    align-items: center;
+    background-color: #fff;
     border-radius: 0.25rem;
-    text-align: center;
+    padding: 0.5rem;
   }
   
-  .stat-label {
-    font-size: 0.8rem;
+  .stat-icon {
+    margin-right: 0.5rem;
+    font-size: 1.25rem;
+  }
+  
+  .stat-details {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .stat-name {
+    font-size: 0.85rem;
     color: #666;
   }
   
   .stat-value {
     font-weight: bold;
-    font-size: 1.1rem;
-  }
-  
-  .hero-sections {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
-  }
-  
-  .hero-equipment, .hero-inventory {
-    background-color: #f8f8f8;
-    border-radius: 0.25rem;
-    padding: 0.75rem;
-  }
-  
-  .hero-equipment h4, .hero-inventory h4 {
-    margin: 0 0 0.5rem 0;
     font-size: 1rem;
-    display: flex;
-    align-items: center;
   }
   
-  .equipment-icon, .inventory-icon, .combat-icon {
-    margin-right: 0.5rem;
-  }
-  
-  .equipment-list, .inventory-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    font-size: 0.9rem;
-  }
-  
-  .equipment-list li, .inventory-list li {
-    margin-bottom: 0.25rem;
-  }
-  
-  .hero-combat-details {
-    margin: 0.75rem 0;
-    padding: 0.75rem;
+  .combat-information {
     background-color: #fff3e0;
     border-radius: 0.25rem;
+    padding: 0.75rem;
     border-left: 4px solid #ff7043;
   }
   
-  .hero-combat-details h4 {
-    margin: 0 0 0.5rem 0;
-    font-size: 1rem;
+  .combat-header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .combat-icon {
+    font-size: 1.25rem;
+  }
+  
+  .combat-title {
+    font-weight: bold;
+    font-size: 1rem;
+  }
+  
+  .combat-round {
+    font-size: 0.85rem;
+    color: #666;
+  }
+  
+  .enemy-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .enemy-name {
+    font-weight: bold;
+    font-size: 1rem;
+  }
+  
+  .enemy-health {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .health-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: #666;
+  }
+  
+  .enemy-stats {
+    display: flex;
+    gap: 1rem;
+  }
+  
+  .enemy-stat {
+    display: flex;
+    gap: 0.25rem;
+  }
+  
+  .enemy-stat-label {
+    font-weight: bold;
     color: #ff7043;
   }
   
-  .combat-row {
+  .enemy-stat-value {
+    font-weight: bold;
+  }
+  
+  .exploration-information {
+    background-color: #e3f2fd;
+    border-radius: 0.25rem;
+    padding: 0.75rem;
+    border-left: 4px solid #4a83ff;
+  }
+  
+  .exploration-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .exploration-icon {
+    font-size: 1.25rem;
+    margin-right: 0.5rem;
+  }
+  
+  .exploration-title {
+    font-weight: bold;
+    font-size: 1rem;
+  }
+  
+  .dungeon-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .dungeon-name {
+    font-weight: bold;
+    font-size: 1rem;
+  }
+  
+  .dungeon-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .progress-label {
+    font-size: 0.85rem;
+    color: #666;
+  }
+  
+  .success-chance {
     display: flex;
     justify-content: space-between;
-    font-size: 0.95rem;
-    margin-bottom: 0.25rem;
+    align-items: center;
+  }
+  
+  .chance-label {
+    font-size: 0.85rem;
+    color: #666;
+  }
+  
+  .chance-value {
+    font-weight: bold;
+    font-size: 1rem;
+  }
+  
+  .chance {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+  }
+  
+  .high-chance {
+    background-color: #c8e6c9;
+    color: #388e3c;
+  }
+  
+  .medium-chance {
+    background-color: #fff9c4;
+    color: #fbc02d;
+  }
+  
+  .low-chance {
+    background-color: #ffe0b2;
+    color: #f57c00;
+  }
+  
+  .very-low-chance {
+    background-color: #ffcdd2;
+    color: #d32f2f;
+  }
+  
+  .healing-information {
+    background-color: #fce4ec;
+    border-radius: 0.25rem;
+    padding: 0.75rem;
+    border-left: 4px solid #ff4a83;
+  }
+  
+  .healing-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .healing-icon {
+    font-size: 1.25rem;
+    margin-right: 0.5rem;
+  }
+  
+  .healing-title {
+    font-weight: bold;
+    font-size: 1rem;
+  }
+  
+  .healing-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .healing-estimate {
+    font-size: 0.85rem;
+    color: #666;
+  }
+  
+  .idle-information {
+    background-color: #f5f5f5;
+    border-radius: 0.25rem;
+    padding: 0.75rem;
+    border-left: 4px solid #7c7c7c;
+  }
+  
+  .idle-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .idle-icon {
+    font-size: 1.25rem;
+    margin-right: 0.5rem;
+  }
+  
+  .idle-title {
+    font-weight: bold;
+    font-size: 1rem;
+  }
+  
+  .idle-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .idle-estimate {
+    font-size: 0.85rem;
+    color: #666;
+  }
+  
+  .equipment-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .equipment-slot {
+    display: flex;
+    align-items: center;
+    background-color: #fff;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+  }
+  
+  .slot-icon {
+    font-size: 1.25rem;
+    margin-right: 0.5rem;
+  }
+  
+  .slot-details {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .slot-name {
+    font-size: 0.85rem;
+    color: #666;
+  }
+  
+  .slot-value {
+    font-weight: bold;
+    font-size: 1rem;
+  }
+  
+  .slot-stats {
+    font-size: 0.85rem;
+    color: #666;
+  }
+  
+  .durability {
+    font-size: 0.85rem;
+    color: #666;
+  }
+  
+  .inventory-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .inventory-row {
+    display: flex;
+    align-items: center;
+    background-color: #fff;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+  }
+  
+  .inventory-icon {
+    font-size: 1.25rem;
+    margin-right: 0.5rem;
+  }
+  
+  .inventory-name {
+    flex: 1;
+    font-size: 0.85rem;
+    color: #666;
+  }
+  
+  .inventory-value {
+    font-weight: bold;
+    font-size: 1rem;
   }
   
   .info-message {
@@ -566,7 +928,7 @@
       max-height: 300px;
     }
     
-    .hero-sections {
+    .character-sheet-grid {
       grid-template-columns: 1fr;
     }
   }

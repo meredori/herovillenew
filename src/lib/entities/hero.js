@@ -268,7 +268,6 @@ class Hero {
             
             for (const dungeon of availableDungeons) {
                 const successChance = this.calculateDungeonSuccessChance(dungeon);
-                console.log(`Success chance for ${this.name} in ${dungeon.name}: ${successChance}%`);
                 // For dungeons with >50% success chance, pick the strongest
                 if (successChance >= 50 && (bestDungeon === null || dungeon.difficulty > bestDungeon.difficulty)) {
                     bestDungeon = dungeon;
@@ -326,11 +325,20 @@ class Hero {
      * @returns {Object} A simple object with hero details
      */
     getDisplayInfo() {
+        // Calculate total damage range including weapon
+        let minDamage = this.minDamage;
+        let maxDamage = this.maxDamage;
+        
+        if (this.equipment.weapon) {
+            minDamage = this.minDamage + this.equipment.weapon.minDamage - 1;
+            maxDamage = this.maxDamage + this.equipment.weapon.maxDamage - 1;
+        }
+        
         return {
             id: this.id,
             name: this.name,
             health: `${this.health}/${this.maxHealth}`,
-            damage: `${this.minDamage}-${this.maxDamage}`,
+            damage: `${minDamage}-${maxDamage}`,
             level: this.level,
             experience: this.experience,
             status: this.status,
@@ -339,7 +347,7 @@ class Hero {
             dungeonProgress: this.dungeonProgress,
             dungeonSuccessChance: this.dungeonSuccessChance,
             equipment: {
-                weapon: this.equipment.weapon ? this.equipment.weapon.name : 'None',
+                weapon: this.equipment.weapon,
                 armor: this.equipment.armor ? this.equipment.armor.name : 'None',
                 accessory: this.equipment.accessory ? this.equipment.accessory.name : 'None'
             },

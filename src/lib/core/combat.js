@@ -178,6 +178,34 @@ class CombatSystem {
     }
 
     /**
+     * Handle experience gain and level up logic
+     * @param {Object} currentHero - The current hero state
+     * @param {number} expGained - Amount of experience to add
+     * @param {string} monsterName - The name of the defeated monster
+     * @param {number} goldGained - Amount of gold gained
+     * @param {number} partsGained - Amount of monster parts gained
+     * @returns {Object} The updated hero with experience added
+     */
+    handleExperienceGain(currentHero, expGained, monsterName, goldGained, partsGained) {
+        // Add experience and check for level up
+        const updatedHero = currentHero.addExperience(expGained);
+        
+        // If hero leveled up to level 2 or higher, unlock blacksmith
+        if (updatedHero.level >= 2 && currentHero.level < 2) {
+            this.game.unlockBlacksmithBuilding();
+        }
+        
+        this.game.log(`${currentHero.name} defeats the ${monsterName}!`);
+        this.game.log(`Gained: ${expGained} experience, ${goldGained} gold, and ${partsGained} monster parts.`);
+        
+        if (updatedHero.level > currentHero.level) {
+            this.game.log(`${updatedHero.name} has leveled up to level ${updatedHero.level}!`);
+        }
+        
+        return updatedHero;
+    }
+
+    /**
      * Handle monster defeat logic
      * @param {Dungeon} dungeon - The dungeon where combat occurs
      * @param {Hero} hero - The hero in combat
@@ -204,16 +232,20 @@ class CombatSystem {
         // Rewards: use isVariant to determine loot
         let expGained, goldGained, partsGained;
         if (monster.isVariant) {
-            expGained = 50 * dungeon.difficulty;
-            goldGained = dungeon.difficulty;
+            expGained = 20 * dungeon.difficulty;
+            goldGained = dungeon.difficulty * dungeon.difficulty;
             partsGained = 0;
             this.awardLoot(currentHero, goldGained, partsGained);
+            
+            // Process experience gain and level up
+            const updatedHero = this.handleExperienceGain(currentHero, expGained, monster.name, goldGained, partsGained);
+            
             updatedDungeon.completed = true;
             // Clean up explorer state and reset hero after final boss
             const cleanedDungeon = updatedDungeon.removeExplorerReactive(hero.id);
             updateDungeon(dungeon.id, cleanedDungeon);
-            currentHero.resetDungeonProgress("victory", false, this.game, cleanedDungeon);
-            updateHero(hero.id, currentHero);
+            updatedHero.resetDungeonProgress("victory", false, this.game, cleanedDungeon);
+            updateHero(hero.id, updatedHero);
             return;
         } else {
             expGained = 10 * dungeon.difficulty;
@@ -230,22 +262,9 @@ class CombatSystem {
             updateDungeon(dungeon.id, updatedDungeon);
         }
         
-        // Add experience and check for level up
-        const updatedHero = currentHero.addExperience(expGained);
-        
-        // If hero leveled up to level 2 or higher, unlock blacksmith
-        if (updatedHero.level >= 2 && currentHero.level < 2) {
-            this.game.unlockBlacksmithBuilding();
-        }
-        
+        // Process experience gain and level up for non-variant monsters
+        const updatedHero = this.handleExperienceGain(currentHero, expGained, monster.name, goldGained, partsGained);
         updateHero(hero.id, updatedHero);
-        
-        this.game.log(`${hero.name} defeats the ${monster.name}!`);
-        this.game.log(`Gained: ${expGained} experience, ${goldGained} gold, and ${partsGained} monster parts.`);
-        
-        if (updatedHero.level > currentHero.level) {
-            this.game.log(`${updatedHero.name} has leveled up to level ${updatedHero.level}!`);
-        }
         
         // Reset combat round tracker in the explorer data
         const explorerData = updatedDungeon.getExplorerProgress(hero.id);

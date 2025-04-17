@@ -4,6 +4,13 @@
   import { get } from 'svelte/store';
   import { onDestroy } from 'svelte';
   import { Consumables, getConsumableById, getMaxStack, DEFAULT_MAX_POTIONS } from '../../entities/consumable.js';
+  
+  // Import shared components
+  import ItemCard from '../shared/ItemCard.svelte';
+  import StatItem from '../shared/StatItem.svelte';
+  import ResourceCost from '../shared/ResourceCost.svelte';
+  import CostsList from '../shared/CostsList.svelte';
+  import HeroCard from '../shared/HeroCard.svelte';
 
   // Use Consumables for the potions list
   const potions = Consumables.filter(c => c.type === 'potion');
@@ -43,13 +50,6 @@
       return game;
     });
   }
-  
-  // Get the color for stock display
-  function getStockColor(count) {
-    if (count >= 5) return 'high-stock';
-    if (count >= 2) return 'medium-stock';
-    return 'low-stock';
-  }
 </script>
 
 <div class="apothecary-container">
@@ -63,53 +63,42 @@
   <h3>Brew Potions</h3>
   <div class="potions-grid">
     {#each potions as potion}
-      <div class="potion-card {potion.disabled ? 'disabled' : ''}">
-        <div class="potion-header">
-          <h4>{potion.name}</h4>
-          <div class="potion-stock {getStockColor(potionsInventory[potion.id] || 0)}">
-            Stock: {potionsInventory[potion.id] || 0}
-          </div>
+      <ItemCard
+        item={potion}
+        stock={potionsInventory[potion.id] || 0}
+        themeColor="#8e44ad"
+        buttonText="Brew Potion"
+        buttonDisabled={!canAffordPotion(potion)}
+        onButtonClick={() => brewPotion(potion)}
+      >
+        <div slot="stats">
+          <StatItem 
+            icon={potion.icon || '🧪'}
+            label="Effect:"
+            value={potion.effect || 'Healing'}
+          />
         </div>
         
-        <p class="potion-description">{potion.description}</p>
-        
-        <div class="potion-stats">
-          <div class="stat-item">
-            <span class="stat-icon">{potion.icon || '🧪'}</span>
-            <span class="stat-label">Effect:</span>
-            <span class="stat-value">{potion.effect || 'Healing'}</span>
-          </div>
-        </div>
-        
-        <div class="potion-cost">
-          <p>Cost to Brew:</p>
-          <ul class="cost-list">
+        <div slot="costs">
+          <CostsList title="Cost to Brew:">
             {#if potion.cost && potion.cost.monsterParts}
-              <li>
-                <span class="resource-icon">🦴</span>
-                <span class="resource-name">Monster Parts: </span>
-                <span class="resource-amount">{potion.cost.monsterParts}</span>
-              </li>
+              <ResourceCost 
+                resourceName="Monster Parts"
+                amount={potion.cost.monsterParts}
+                icon="🦴"
+              />
             {/if}
-          </ul>
-          <p>Hero Purchase Price:</p>
-          <ul class="cost-list">
-            <li>
-              <span class="resource-icon">🪙</span>
-              <span class="resource-name">Gold: </span>
-              <span class="resource-amount">{potion.salePrice}</span>
-            </li>
-          </ul>
+          </CostsList>
+          
+          <CostsList title="Hero Purchase Price:">
+            <ResourceCost 
+              resourceName="Gold"
+              amount={potion.salePrice}
+              icon="🪙"
+            />
+          </CostsList>
         </div>
-        
-        <button 
-          class="brew-button"
-          disabled={!canAffordPotion(potion)}
-          on:click={() => brewPotion(potion)}
-        >
-          {potion.disabled ? 'Not Available' : 'Brew Potion'}
-        </button>
-      </div>
+      </ItemCard>
     {/each}
   </div>
   
@@ -157,6 +146,9 @@
 <style>
   .apothecary-container {
     padding: 0.5rem;
+    width: 100% - 0.25rem;
+    max-width: 1200px;
+    margin: 0 auto;
   }
   
   h2 {
@@ -183,180 +175,16 @@
     color: #555;
   }
   
-  .resources-panel {
-    background-color: #f8f8f8;
-    border-radius: 0.5rem;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-  }
-  
-  .resources-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-  
-  .resource-item {
-    display: flex;
-    align-items: center;
-    background-color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 0.25rem;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-  }
-  
-  .resource-icon {
-    margin-right: 0.5rem;
-  }
-  
-  .resource-label {
-    margin-right: 0.5rem;
-    color: #666;
-  }
-  
-  .resource-value {
-    font-weight: bold;
-  }
-  
   .potions-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 1.5rem;
     margin-top: 1rem;
   }
   
-  .potion-card {
-    background-color: white;
-    border-radius: 0.5rem;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
-    border-left: 4px solid #8e44ad;
-  }
-  
-  .potion-card:hover:not(.disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-  }
-  
-  .potion-card.disabled {
-    opacity: 0.7;
-    border-left-color: #ccc;
-  }
-  
-  .potion-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-  }
-  
-  .potion-stock {
-    font-size: 0.8rem;
-    font-weight: bold;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-  }
-  
-  .high-stock {
-    background-color: #4caf50;
-    color: white;
-  }
-  
-  .medium-stock {
-    background-color: #ff9800;
-    color: white;
-  }
-  
-  .low-stock {
-    background-color: #f44336;
-    color: white;
-  }
-  
-  .potion-description {
-    margin-bottom: 1rem;
-    color: #555;
-  }
-  
-  .potion-stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-  }
-  
-  .stat-item {
-    display: flex;
-    align-items: center;
-    padding: 0.5rem 0.75rem;
-    background-color: #f8f8f8;
-    border-radius: 0.25rem;
-    font-size: 0.9rem;
-  }
-  
-  .stat-icon {
-    margin-right: 0.5rem;
-  }
-  
-  .stat-label {
-    color: #666;
-    margin-right: 0.5rem;
-  }
-  
-  .stat-value {
-    font-weight: bold;
-  }
-  
-  .potion-cost p {
-    margin: 0 0 0.5rem 0;
-    font-weight: bold;
-    color: #666;
-  }
-  
-  .cost-list {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 1rem 0;
-  }
-  
-  .cost-list li {
-    display: flex;
-    align-items: center;
-    margin-bottom: 0.25rem;
-  }
-  
-  .resource-name {
-    text-transform: capitalize;
-  }
-  
-  .resource-amount {
-    font-weight: bold;
-    margin-left: 0.25rem;
-  }
-  
-  .brew-button {
-    width: 100%;
-    padding: 0.5rem;
-    background-color: #8e44ad;
-    color: white;
-    border: none;
-    border-radius: 0.25rem;
-    font-size: 0.9rem;
-    cursor: pointer;
-  }
-  
-  .brew-button:hover:not([disabled]) {
-    background-color: #9b59b6;
-  }
-  
-  .brew-button[disabled] {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
-  
   .heroes-potions {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 1.5rem;
     margin-top: 1rem;
   }
@@ -446,7 +274,16 @@
     font-size: 1.1rem;
   }
   
+  @media (max-width: 1200px) {
+    .potions-grid,
+    .heroes-potions {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  
   @media (max-width: 768px) {
+    .potions-grid,
+    .heroes-potions,
     .potions-section {
       grid-template-columns: 1fr;
     }

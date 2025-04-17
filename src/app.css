@@ -59,6 +59,9 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  /* Global styles migrated from Town component */
+  background: #f3e9d2 url('https://www.transparenttextures.com/patterns/old-mathematics.png');
+  color: #3e2c1c;
 }
 
 h1 {

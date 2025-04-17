@@ -18,6 +18,7 @@
   let gameInitialized = false;
   let game;
   let showGameMenu = false; // Track dropdown menu visibility
+  let showGameLog = false; // Track game log visibility
   const unsubscribe = gameStore.subscribe(value => game = value);
   
   // Initialize the game when the component mounts
@@ -46,6 +47,12 @@
   // Toggle game menu dropdown
   function toggleGameMenu() {
     showGameMenu = !showGameMenu;
+  }
+  
+  // Toggle game log visibility
+  function toggleGameLog() {
+    showGameLog = !showGameLog;
+    showGameMenu = false; // Close dropdown after action
   }
   
   // Close menu when clicking outside
@@ -109,6 +116,7 @@
           <button on:click={saveGame}>Save Game</button>
           <button on:click={loadGame}>Load Game</button>
           <button on:click={resetGame}>Reset Game</button>
+          <button on:click={toggleGameLog}>{showGameLog ? 'Hide' : 'Show'} Game Log</button>
         </div>
       {/if}
     </div>
@@ -157,11 +165,23 @@
       {/if}
     </section>
     
-    <aside class="game-log">
-      {#if GameLog}
-        <GameLog />
-      {/if}
-    </aside>
+    {#if showGameLog}
+      <aside class="game-log">
+        <div class="game-log-header">
+          <h3 class="log-title">Game Log</h3>
+          <button class="close-log-button" on:click={toggleGameLog}>×</button>
+        </div>
+        {#if GameLog}
+          <GameLog />
+        {/if}
+      </aside>
+    {/if}
+    
+    {#if !showGameLog}
+      <button class="game-log-toggle" on:click={toggleGameLog} title="Show Game Log">
+        📜
+      </button>
+    {/if}
   </div>
 </main>
 
@@ -246,7 +266,7 @@
   
   .game-container {
     display: grid;
-    grid-template-columns: 1fr 300px;
+    grid-template-columns: 1fr;
     gap: 1rem;
     height: calc(100vh - 120px);
   }
@@ -254,26 +274,60 @@
   .game-content {
     display: flex;
     flex-direction: column;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
   }
   
   .resources-container {
     margin-bottom: 1rem;
+    width: 100%;
   }
   
   .tab-content {
     flex-grow: 1;
     overflow-y: auto;
-    padding: 1rem;
+    padding: 1.5rem;
     background-color: #f5f5f5;
     border-radius: 0.5rem;
+    width: 100%;
+    min-width: 1200px;
+    max-width: 1200px;
+    margin: 0 auto;
+    box-sizing: border-box;
   }
   
   .game-log {
-    height: 100%;
+    width: 300px;
+    max-height: 500px;
     overflow-y: auto;
     padding: 1rem;
-    background-color: #f5f5f5;
+    background-color: white;
     border-radius: 0.5rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    border: 1px solid #ddd;
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 100;
+  }
+  
+  .game-log-toggle {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 101;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   }
   
   @media (max-width: 768px) {
@@ -293,5 +347,38 @@
     height: 200px;
     font-size: 1.5rem;
     color: #666;
+  }
+
+  .game-log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .log-title {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #333;
+  }
+  
+  .close-log-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: #777;
+    padding: 0;
+    margin: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .close-log-button:hover {
+    color: #333;
   }
 </style>
