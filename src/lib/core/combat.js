@@ -191,7 +191,9 @@ class CombatSystem {
         const updatedHero = currentHero.addExperience(expGained);
         
         // If hero leveled up to level 2 or higher, unlock blacksmith
-        if (updatedHero.level >= 2 && currentHero.level < 2) {
+        // Ensure we're only checking once when the hero actually reaches level 2
+        if (updatedHero.level >= 2) {
+            // Force unlock the blacksmith regardless of previous level
             this.game.unlockBlacksmithBuilding();
         }
         

@@ -3,7 +3,7 @@
   import gameStore, { resources, buildings, heroes } from '../../core/gameStore.js';
   import { get } from 'svelte/store';
   import { onDestroy } from 'svelte';
-  import { Consumables, getConsumableById, getMaxStack, DEFAULT_MAX_POTIONS } from '../../entities/consumable.js';
+  import { Consumables, getConsumableById, getMaxStack, DEFAULT_MAX_POTIONS, getAvailablePotions } from '../../entities/consumable.js';
   
   // Import shared components
   import ItemCard from '../shared/ItemCard.svelte';
@@ -12,14 +12,14 @@
   import CostsList from '../shared/CostsList.svelte';
   import HeroCard from '../shared/HeroCard.svelte';
 
-  // Use Consumables for the potions list
-  const potions = Consumables.filter(c => c.type === 'potion');
+  // Get the apothecary building
+  $: apothecary = $buildings.find(b => b.id === 'apothecary') || { level: 0 };
+
+  // Get potions available at the current apothecary level
+  $: potions = getAvailablePotions(apothecary.level);
 
   // Get current town potion inventory reactively
   $: potionsInventory = $gameStore.potions || {};
-
-  // Ensure Svelte reactivity for resources
-  $: $resources;
 
   // Check if player can afford a potion
   function canAffordPotion(potion) {
@@ -30,23 +30,29 @@
     });
   }
 
-  // Brew a potion
-  function brewPotion(potion) {
+  // Brew a potion (refactored to accept potionId)
+  function brewPotion(potionId) {
+    const potion = Consumables.find(c => c.id === potionId && c.type === 'potion');
+    if (!potion) return;
     gameStore.update(game => {
-      // Deduct resources
-      if (potion.cost) {
-        Object.entries(potion.cost).forEach(([resource, amount]) => {
-          if (game.resources && typeof game.resources[resource] === 'number') {
-            game.resources[resource] = Math.max(0, game.resources[resource] - amount);
-          }
-        });
+      // Check if player can afford to brew the potion
+      if (!canAffordPotion(potion)) {
+        game.log(`Not enough resources to brew ${potion.name}.`);
+        return game;
       }
-      // Add potion to inventory
+      // Deduct resources from town inventory (replace object for reactivity)
+      if (potion.cost && potion.cost.monsterParts) {
+        game.resources = {
+          ...game.resources,
+          monsterParts: game.resources.monsterParts - potion.cost.monsterParts
+        };
+      }
+      // Initialize potion inventory if it doesn't exist
       if (!game.potions) game.potions = {};
+      // Add potion to town inventory
       game.potions[potion.id] = (game.potions[potion.id] || 0) + 1;
-      if (typeof game.log === 'function') {
-        game.log(`Brewed a ${potion.name}! Added to town inventory.`);
-      }
+      // Log the brewing
+      game.log(`Brewed a ${potion.name}! Added to town inventory.`);
       return game;
     });
   }
@@ -69,7 +75,7 @@
         themeColor="#8e44ad"
         buttonText="Brew Potion"
         buttonDisabled={!canAffordPotion(potion)}
-        onButtonClick={() => brewPotion(potion)}
+        onButtonClick={() => brewPotion(potion.id)}
       >
         <div slot="stats">
           <StatItem 

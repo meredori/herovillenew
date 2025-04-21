@@ -29,3 +29,14 @@ export function getMaxStack(consumableId) {
   const consumable = getConsumableById(consumableId);
   return consumable?.maxStack || DEFAULT_MAX_POTIONS;
 }
+
+/**
+ * Get all potions available at a given apothecary level
+ * @param {number} apothecaryLevel - The level of the apothecary
+ * @returns {Array} Array of potions available at the specified level
+ */
+export function getAvailablePotions(apothecaryLevel) {
+    return Consumables.filter(
+        c => c.type === 'potion' && (!c.requiredApothecaryLevel || c.requiredApothecaryLevel <= apothecaryLevel)
+    );
+}

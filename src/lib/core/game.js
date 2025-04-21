@@ -89,6 +89,10 @@ class Game {
         // Set up initial heroes
         this.heroes = [];
         
+        // Reset town inventories
+        this.potions = {};
+        this.weapons = {};
+        
         // Set up initial dungeons (all undiscovered initially)
         this.dungeons = [
             new Dungeon({
@@ -110,7 +114,7 @@ class Game {
                 discovered: false,
                 discoveryCost: 20, // Cost in gold
                 difficulty: 2,
-                length: 10,
+                length: 15,
                 encounterRate: 0.3,
                 monsterType: 'Wolf',
                 variant: { name: 'Alpha', isPrefix: false, healthMultiplier: 2.0, damageMultiplier: 1.6 }
