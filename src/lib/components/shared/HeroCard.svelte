@@ -10,7 +10,7 @@
   export let compact = false; // New option for compact display
 </script>
 
-<div class="hero-card {compact ? 'hero-card-compact' : ''}" style="--theme-color: {themeColor}">
+<div class="hero-card shared-card {compact ? 'hero-card-compact' : ''}" style="--theme-color: {themeColor}">
   <div class="hero-header">
     <h4>{hero.name}</h4>
     <div class="hero-level">Level {hero.level}</div>
@@ -140,12 +140,9 @@
 </div>
 
 <style>
+  /* Remove duplicate card container styles now handled by .shared-card */
   .hero-card {
-    background-color: white;
-    border-radius: 0.5rem;
-    padding: 1rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    border-left: 4px solid var(--theme-color);
+    /* Only keep styles unique to HeroCard, if any */
   }
   
   .hero-card-compact {

@@ -8,7 +8,7 @@
   export let onUpgradeClick = () => {};
 </script>
 
-<div class="building" style="--theme-color: {themeColor};">
+<div class="building shared-card" style="--theme-color: {themeColor};">
   <div class="building-header">
     <h3><span class="building-icon">{icon}</span> {building.name}</h3>
     <div class="building-level">Level {building.level}</div>
@@ -34,22 +34,14 @@
 </div>
 
 <style>
+  /* Remove duplicate card container styles now handled by .shared-card */
   .building {
-    background-color: white;
-    border-left: 4px solid var(--theme-color);
-    border-radius: 0.5rem;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
+    /* Only keep styles unique to BuildingUpgrade, if any */
     position: relative;
     display: flex;
     flex-direction: column;
-    min-height: 300px; /* Ensures consistent card height */
-  }
-
-  .building:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    min-height: 300px;
+    transition: transform 0.2s, box-shadow 0.2s;
   }
 
   .building-header {

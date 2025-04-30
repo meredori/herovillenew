@@ -73,6 +73,15 @@ h1 {
   padding: 2em;
 }
 
+/* Shared card container for all card-like UI components */
+.shared-card {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border-left: 4px solid var(--theme-color, #4a83ff);
+  padding: 1rem;
+}
+
 #app {
   max-width: 1280px;
   margin: 0 auto;

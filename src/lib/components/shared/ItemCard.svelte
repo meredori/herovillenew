@@ -24,7 +24,7 @@
   }
 </script>
 
-<div class="item-card {disabled ? 'disabled' : ''}" style="--theme-color: {themeColor}">
+<div class="item-card shared-card {disabled ? 'disabled' : ''}" style="--theme-color: {themeColor}">
   <div class="item-header">
     <h4>{name}</h4>
     {#if showStock}
@@ -61,15 +61,6 @@
 </div>
 
 <style>
-  .item-card {
-    background-color: white;
-    border-radius: 0.5rem;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
-    border-left: 4px solid var(--theme-color);
-  }
-  
   .item-card:hover:not(.disabled) {
     transform: translateY(-2px);
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
